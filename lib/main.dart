@@ -113,6 +113,7 @@ class _DashboardPanelState extends State<DashboardPanel> {
     HalamanProduk(),
     HalamanHistory(),
     HalamanKatalog(),
+    HalamanSetting(),
   ];
 
   @override
@@ -129,6 +130,7 @@ class _DashboardPanelState extends State<DashboardPanel> {
           BottomNavigationBarItem(icon: Icon(Icons.inventory_2), label: 'Produk'),
           BottomNavigationBarItem(icon: Icon(Icons.analytics), label: 'Laporan'),
           BottomNavigationBarItem(icon: Icon(Icons.storefront), label: 'Katalog'),
+          BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Setting'),
         ],
       ),
     );
