@@ -9,7 +9,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:bluetooth_print/bluetooth_print.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:image_picker/image_picker.dart;
+import 'package:image_picker/image_picker.dart'; // ← PINDAHIN KE SINI + BENERIN TANDA '
 
 const String baseUrl = 'https://abahkhuzai.pythonanywhere.com';
 const Color warnaUtama = Color(0xFF7F00FF);
@@ -138,7 +138,6 @@ class _DashboardPanelState extends State<DashboardPanel> {
   }
 }
 
-// 3. HALAMAN PESANAN
 // 3. HALAMAN PESANAN - UDAH ADA STATUS
 class HalamanOrder extends StatefulWidget {
   @override
@@ -164,7 +163,7 @@ class _HalamanOrderState extends State<HalamanOrder> {
 Future<void> printStruk(Map order) async {
   // CEK BLUETOOTH NYALA
   bool? isOn = await bluetoothPrint.isOn;
-  if (isOn != true) {
+  if (isOn!= true) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Nyalain Bluetooth dulu Boss'), backgroundColor: Colors.red),
     );
@@ -184,7 +183,7 @@ Future<void> printStruk(Map order) async {
   // DENGERIN HASIL + TAMPILIN DIALOG PILIH
   bluetoothPrint.scanResults.listen((devices) async {
     Navigator.pop(context); // Tutup loading
-    
+
     if (devices.isNotEmpty) {
       BluetoothDevice? selected = await showDialog(
         context: context,
@@ -194,8 +193,8 @@ Future<void> printStruk(Map order) async {
             mainAxisSize: MainAxisSize.min,
             children: devices.map((d) => ListTile(
               leading: Icon(Icons.print),
-              title: Text(d.name ?? 'Unknown Device'),
-              subtitle: Text(d.address ?? ''),
+              title: Text(d.name?? 'Unknown Device'),
+              subtitle: Text(d.address?? ''),
               onTap: () => Navigator.pop(ctx, d),
             )).toList(),
           ),
@@ -205,40 +204,40 @@ Future<void> printStruk(Map order) async {
         ),
       );
 
-      if (selected != null) {
+      if (selected!= null) {
         try {
           await bluetoothPrint.connect(selected);
-          
+
           // DATA STRUK
           Map<String, dynamic> config = {};
           List<LineText> list = [];
-          
-          list.add(LineText(type: LineText.TYPE_TEXT, content: 'TB MEKAR', 
+
+          list.add(LineText(type: LineText.TYPE_TEXT, content: 'TB MEKAR',
               weight: 1, align: LineText.ALIGN_CENTER, linefeed: 1));
-          list.add(LineText(type: LineText.TYPE_TEXT, content: 'Probolinggo', 
+          list.add(LineText(type: LineText.TYPE_TEXT, content: 'Probolinggo',
               align: LineText.ALIGN_CENTER, linefeed: 1));
           list.add(LineText(type: LineText.TYPE_TEXT, content: '------------------------------', linefeed: 1));
-          list.add(LineText(type: LineText.TYPE_TEXT, 
+          list.add(LineText(type: LineText.TYPE_TEXT,
               content: 'Order: ${order['id'].toString().substring(0,8)}', linefeed: 1));
           list.add(LineText(type: LineText.TYPE_TEXT, content: 'Tgl: ${order['tanggal']}', linefeed: 1));
           list.add(LineText(type: LineText.TYPE_TEXT, content: '------------------------------', linefeed: 1));
-          
+
           for (var item in order['items']) {
             list.add(LineText(type: LineText.TYPE_TEXT, content: item['nama'], linefeed: 1));
-            list.add(LineText(type: LineText.TYPE_TEXT, 
-                content: '  ${item['qty']} x ${formatRupiah(item['harga'])} = ${formatRupiah(item['qty'] * item['harga'])}', 
+            list.add(LineText(type: LineText.TYPE_TEXT,
+                content: ' ${item['qty']} x ${formatRupiah(item['harga'])} = ${formatRupiah(item['qty'] * item['harga'])}',
                 linefeed: 1));
           }
-          
+
           list.add(LineText(type: LineText.TYPE_TEXT, content: '------------------------------', linefeed: 1));
-          list.add(LineText(type: LineText.TYPE_TEXT, 
-              content: 'TOTAL: ${formatRupiah(order['total'])}', 
+          list.add(LineText(type: LineText.TYPE_TEXT,
+              content: 'TOTAL: ${formatRupiah(order['total'])}',
               weight: 1, align: LineText.ALIGN_RIGHT, linefeed: 2));
-          list.add(LineText(type: LineText.TYPE_TEXT, 
+          list.add(LineText(type: LineText.TYPE_TEXT,
               content: 'Terima Kasih', align: LineText.ALIGN_CENTER, linefeed: 3));
-          
+
           await bluetoothPrint.printReceipt(config, list);
-          
+
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Struk berhasil dicetak!'), backgroundColor: Colors.green),
           );
@@ -321,11 +320,11 @@ Future<void> printStruk(Map order) async {
     return Scaffold(
       appBar: AppBar(title: Text('Pesanan Masuk'), backgroundColor: warnaUtama),
       body: loading
-  ? Center(child: CircularProgressIndicator())
+ ? Center(child: CircularProgressIndicator())
         : RefreshIndicator(
             onRefresh: getOrders,
             child: orders.isEmpty
-        ? Center(child: Text('Belum ada pesanan'))
+       ? Center(child: Text('Belum ada pesanan'))
                 : ListView.builder(
                     itemCount: orders.length,
                     itemBuilder: (ctx, i) {
@@ -347,7 +346,7 @@ Future<void> printStruk(Map order) async {
                           subtitle: Text('${o['id']} - ${formatRupiah(o['total'])}'),
                           children: [
                             // LIST ITEM
-                           ...o['items'].map<Widget>((item) => ListTile(
+                          ...o['items'].map<Widget>((item) => ListTile(
                                   title: Text('${item['nama']} x${item['qty']}'),
                                   trailing: Text(formatRupiah(item['harga'] * item['qty'])),
                                 )).toList(),
@@ -400,7 +399,6 @@ Future<void> printStruk(Map order) async {
   }
 }
 
-// 4. HALAMAN PRODUK
 // 4. HALAMAN PRODUK - TAMBAH + EDIT + HAPUS
 class HalamanProduk extends StatefulWidget {
   @override
@@ -476,11 +474,11 @@ class _HalamanProdukState extends State<HalamanProduk> {
     return Scaffold(
       appBar: AppBar(title: Text('Kelola Produk'), backgroundColor: warnaUtama),
       body: loading
-  ? Center(child: CircularProgressIndicator())
+ ? Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: getProduk,
               child: produk.isEmpty
-          ? Center(child: Text('Belum ada produk'))
+         ? Center(child: Text('Belum ada produk'))
                   : ListView.builder(
                       itemCount: produk.length,
                       itemBuilder: (c, i) {
@@ -541,8 +539,6 @@ class FormProduk extends StatefulWidget {
   @override
   State<FormProduk> createState() => _FormProdukState();
 }
-
-import 'package:image_picker/image_picker.dart'; // ← PASTIIN IMPORT INI ADA DI ATAS FILE
 
 class _FormProdukState extends State<FormProduk> {
   final _formKey = GlobalKey<FormState>();
@@ -743,7 +739,7 @@ class _FormProdukState extends State<FormProduk> {
             Text('Foto Produk', style: TextStyle(fontSize: 16, color: Colors.grey[700])),
             SizedBox(height: 8),
             fotoUrl.isEmpty
-          ? Container(
+         ? Container(
                   width: double.infinity,
                   height: 120,
                   decoration: BoxDecoration(
@@ -756,7 +752,7 @@ class _FormProdukState extends State<FormProduk> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         uploadLoading
-                      ? CircularProgressIndicator()
+                     ? CircularProgressIndicator()
                         : Icon(Icons.add_a_photo, size: 40, color: warnaUtama),
                         SizedBox(height: 8),
                         Text(uploadLoading? 'Uploading...' : 'Pilih Foto dari HP'),
@@ -790,7 +786,7 @@ class _FormProdukState extends State<FormProduk> {
                 onPressed: isLoading? null : simpanProduk,
                 style: ElevatedButton.styleFrom(backgroundColor: warnaUtama),
                 child: isLoading
-          ? CircularProgressIndicator(color: Colors.white)
+         ? CircularProgressIndicator(color: Colors.white)
                     : Text(widget.produk == null? 'TAMBAH PRODUK' : 'UPDATE PRODUK',
                         style: TextStyle(color: Colors.white, fontSize: 16)),
               ),
@@ -801,6 +797,7 @@ class _FormProdukState extends State<FormProduk> {
     );
   }
 }
+
 // 5. HALAMAN LAPORAN + EXPORT EXCEL
 class HalamanHistory extends StatefulWidget {
   @override
@@ -856,7 +853,7 @@ class _HalamanHistoryState extends State<HalamanHistory> {
         ],
       ),
       body: loading
-   ? Center(child: CircularProgressIndicator())
+  ? Center(child: CircularProgressIndicator())
           : ListView.builder(
               itemCount: orders.length,
               itemBuilder: (ctx, i) {
@@ -957,9 +954,9 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
           ),
           Expanded(
             child: loading
-        ? Center(child: CircularProgressIndicator(color: warnaUtama))
+       ? Center(child: CircularProgressIndicator(color: warnaUtama))
               : produk.isEmpty
-          ? Center(child: Text('Produk tidak ditemukan'))
+         ? Center(child: Text('Produk tidak ditemukan'))
                 : ListView.builder(
                     itemCount: produk.length,
                     itemBuilder: (c, i) {
@@ -998,6 +995,9 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
   }
 }
 
+
+
+ 
 //================================
 //§ HALAMAN SETTING ADA 7 POINT  §
 //====================≠===========
