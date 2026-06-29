@@ -134,6 +134,7 @@ class _DashboardPanelState extends State<DashboardPanel> {
 }
 
 // 3. HALAMAN PESANAN
+// 3. HALAMAN PESANAN - UDAH ADA STATUS
 class HalamanOrder extends StatefulWidget {
   @override
   State<HalamanOrder> createState() => _HalamanOrderState();
@@ -142,6 +143,7 @@ class HalamanOrder extends StatefulWidget {
 class _HalamanOrderState extends State<HalamanOrder> {
   List orders = [];
   bool loading = true;
+  final listStatus = ['Baru', 'Diproses', 'Selesai', 'Batal'];
 
   @override
   void initState() {
@@ -165,11 +167,35 @@ class _HalamanOrderState extends State<HalamanOrder> {
     return NumberFormat.currency(locale: 'id', symbol: 'Rp ', decimalDigits: 0).format(angka);
   }
 
+  // UBAH STATUS ORDER
+  Future<void> updateStatus(String orderId, String statusBaru) async {
+    await http.put(
+      Uri.parse('$baseUrl/api/orders/$orderId/status'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({'status': statusBaru}),
+    );
+    getOrders(); // Refresh
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Status diubah: $statusBaru'), backgroundColor: Colors.green),
+    );
+  }
+
+  Color warnaStatus(String status) {
+    switch (status) {
+      case 'Baru': return Colors.red;
+      case 'Diproses': return Colors.orange;
+      case 'Selesai': return Colors.green;
+      case 'Batal': return Colors.grey;
+      default: return Colors.blue;
+    }
+  }
+
   void copyStrukWA(Map order) {
     String struk = "🧾 *STRUK TB. MEKAR*\n";
     struk += "ID: ${order['id']}\n";
     struk += "Tgl: ${order['created_at']}\n";
     struk += "Nama: ${order['nama_pembeli']}\n";
+    struk += "Status: ${order['status']?? 'Baru'}\n";
     struk += "------------------------\n";
     for (var item in order['items']) {
       struk += "${item['nama']} x${item['qty']}\n";
@@ -181,7 +207,7 @@ class _HalamanOrderState extends State<HalamanOrder> {
 
     Clipboard.setData(ClipboardData(text: struk));
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Struk dicopy! Tinggal paste di WA'), backgroundColor: Colors.green),
+      SnackBar(content: Text('Struk dicopy!'), backgroundColor: Colors.green),
     );
   }
 
@@ -190,25 +216,55 @@ class _HalamanOrderState extends State<HalamanOrder> {
     return Scaffold(
       appBar: AppBar(title: Text('Pesanan Masuk'), backgroundColor: warnaUtama),
       body: loading
-   ? Center(child: CircularProgressIndicator())
+  ? Center(child: CircularProgressIndicator())
         : RefreshIndicator(
             onRefresh: getOrders,
             child: orders.isEmpty
-         ? Center(child: Text('Belum ada pesanan'))
+        ? Center(child: Text('Belum ada pesanan'))
                 : ListView.builder(
                     itemCount: orders.length,
                     itemBuilder: (ctx, i) {
                       final o = orders[i];
+                      final status = o['status']?? 'Baru';
+
                       return Card(
                         margin: EdgeInsets.all(8),
                         child: ExpansionTile(
+                          leading: Container(
+                            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: warnaStatus(status),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(status, style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                          ),
                           title: Text(o['nama_pembeli'], style: TextStyle(fontWeight: FontWeight.bold)),
                           subtitle: Text('${o['id']} - ${formatRupiah(o['total'])}'),
                           children: [
-                          ...o['items'].map<Widget>((item) => ListTile(
+                            // LIST ITEM
+                           ...o['items'].map<Widget>((item) => ListTile(
                                   title: Text('${item['nama']} x${item['qty']}'),
                                   trailing: Text(formatRupiah(item['harga'] * item['qty'])),
                                 )).toList(),
+
+                            // DROPDOWN STATUS
+                            Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              child: DropdownButtonFormField(
+                                value: status,
+                                decoration: InputDecoration(
+                                  labelText: 'Ubah Status',
+                                  border: OutlineInputBorder(),
+                                ),
+                                items: listStatus.map((s) => DropdownMenuItem(
+                                  value: s,
+                                  child: Text(s),
+                                )).toList(),
+                                onChanged: (v) => updateStatus(o['id'], v!),
+                              ),
+                            ),
+
+                            // TOMBOL AKSI
                             Padding(
                               padding: EdgeInsets.all(8),
                               child: Row(
@@ -216,13 +272,13 @@ class _HalamanOrderState extends State<HalamanOrder> {
                                 children: [
                                   ElevatedButton.icon(
                                     onPressed: () => copyStrukWA(o),
-                                    icon: Icon(Icons.copy),
+                                    icon: Icon(Icons.copy, size: 18),
                                     label: Text('Copy WA'),
                                     style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
                                   ),
                                   ElevatedButton.icon(
-                                    onPressed: () {},
-                                    icon: Icon(Icons.print),
+                                    onPressed: () {}, // Print Thermal nanti
+                                    icon: Icon(Icons.print, size: 18),
                                     label: Text('Print'),
                                     style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
                                   ),
