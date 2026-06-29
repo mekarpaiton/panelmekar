@@ -143,9 +143,13 @@ class HalamanOrder extends StatefulWidget {
 }
 
 class _HalamanOrderState extends State<HalamanOrder> {
+
   List orders = [];
   bool loading = true;
   final listStatus = ['Baru', 'Diproses', 'Selesai', 'Batal'];
+  final BluetoothPrint bluetoothPrint = BluetoothPrint.instance;
+  bool _connected = false;
+  BluetoothDevice? _device;
 
   @override
   void initState() {
