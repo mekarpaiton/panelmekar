@@ -340,7 +340,7 @@ Future<void> printStruk(Map order) async {
                                     style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
                                   ),
                                   ElevatedButton.icon(
-                                    onPressed: () {}, // Print Thermal nanti
+                                    onPressed: () => printStruk(o),
                                     icon: Icon(Icons.print, size: 18),
                                     label: Text('Print'),
                                     style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
