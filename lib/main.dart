@@ -159,56 +159,95 @@ class _HalamanOrderState extends State<HalamanOrder> {
 
 // FUNGSI PRINT THERMAL
 Future<void> printStruk(Map order) async {
-  // 1. Minta izin Bluetooth
-  await Permission.bluetoothScan.request();
-  await Permission.bluetoothConnect.request();
+  // CEK BLUETOOTH NYALA
+  bool? isOn = await bluetoothPrint.isOn;
+  if (isOn != true) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Nyalain Bluetooth dulu Boss'), backgroundColor: Colors.red),
+    );
+    return;
+  }
 
-  // 2. Scan printer
+  // LOADING
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => Center(child: CircularProgressIndicator()),
+  );
+
+  // SCAN PRINTER
   bluetoothPrint.startScan(timeout: Duration(seconds: 4));
 
-  // 3. Pilih printer - Dialog
+  // DENGERIN HASIL + TAMPILIN DIALOG PILIH
   bluetoothPrint.scanResults.listen((devices) async {
+    Navigator.pop(context); // Tutup loading
+    
     if (devices.isNotEmpty) {
-      // Ambil printer pertama yg ketemu
-      _device = devices.first;
-      await bluetoothPrint.connect(_device!);
+      BluetoothDevice? selected = await showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('Pilih Printer Bluetooth'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: devices.map((d) => ListTile(
+              leading: Icon(Icons.print),
+              title: Text(d.name ?? 'Unknown Device'),
+              subtitle: Text(d.address ?? ''),
+              onTap: () => Navigator.pop(ctx, d),
+            )).toList(),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Batal')),
+          ],
+        ),
+      );
 
-      // 4. Bikin struk
-      Map<String, dynamic> config = {};
-      List<LineText> list = [];
-
-      list.add(LineText(type: LineText.TYPE_TEXT, content: 'TB. MEKAR', 
-        weight: 1, align: LineText.ALIGN_CENTER, linefeed: 1));
-      list.add(LineText(type: LineText.TYPE_TEXT, content: 'Jl. Probolinggo No.1', 
-        align: LineText.ALIGN_CENTER, linefeed: 1));
-      list.add(LineText(type: LineText.TYPE_TEXT, content: 'Telp: 0812-xxxx-xxxx', 
-        align: LineText.ALIGN_CENTER, linefeed: 1));
-      list.add(LineText(type: LineText.TYPE_TEXT, content: '===============================', linefeed: 1));
-      list.add(LineText(type: LineText.TYPE_TEXT, content: 'ID: ${order['id']}', linefeed: 1));
-      list.add(LineText(type: LineText.TYPE_TEXT, content: 'Tgl: ${order['created_at']}', linefeed: 1));
-      list.add(LineText(type: LineText.TYPE_TEXT, content: 'Nama: ${order['nama_pembeli']}', linefeed: 1));
-      list.add(LineText(type: LineText.TYPE_TEXT, content: '-------------------------------', linefeed: 1));
-
-      for (var item in order['items']) {
-        list.add(LineText(type: LineText.TYPE_TEXT, content: '${item['nama']}', linefeed: 1));
-        list.add(LineText(type: LineText.TYPE_TEXT, 
-          content: '${item['qty']} x ${formatRupiah(item['harga'])} = ${formatRupiah(item['harga'] * item['qty'])}', 
-          align: LineText.ALIGN_RIGHT, linefeed: 1));
+      if (selected != null) {
+        try {
+          await bluetoothPrint.connect(selected);
+          
+          // DATA STRUK
+          Map<String, dynamic> config = {};
+          List<LineText> list = [];
+          
+          list.add(LineText(type: LineText.TYPE_TEXT, content: 'TB MEKAR', 
+              weight: 1, align: LineText.ALIGN_CENTER, linefeed: 1));
+          list.add(LineText(type: LineText.TYPE_TEXT, content: 'Probolinggo', 
+              align: LineText.ALIGN_CENTER, linefeed: 1));
+          list.add(LineText(type: LineText.TYPE_TEXT, content: '------------------------------', linefeed: 1));
+          list.add(LineText(type: LineText.TYPE_TEXT, 
+              content: 'Order: ${order['id'].toString().substring(0,8)}', linefeed: 1));
+          list.add(LineText(type: LineText.TYPE_TEXT, content: 'Tgl: ${order['tanggal']}', linefeed: 1));
+          list.add(LineText(type: LineText.TYPE_TEXT, content: '------------------------------', linefeed: 1));
+          
+          for (var item in order['items']) {
+            list.add(LineText(type: LineText.TYPE_TEXT, content: item['nama'], linefeed: 1));
+            list.add(LineText(type: LineText.TYPE_TEXT, 
+                content: '  ${item['qty']} x ${formatRupiah(item['harga'])} = ${formatRupiah(item['qty'] * item['harga'])}', 
+                linefeed: 1));
+          }
+          
+          list.add(LineText(type: LineText.TYPE_TEXT, content: '------------------------------', linefeed: 1));
+          list.add(LineText(type: LineText.TYPE_TEXT, 
+              content: 'TOTAL: ${formatRupiah(order['total'])}', 
+              weight: 1, align: LineText.ALIGN_RIGHT, linefeed: 2));
+          list.add(LineText(type: LineText.TYPE_TEXT, 
+              content: 'Terima Kasih', align: LineText.ALIGN_CENTER, linefeed: 3));
+          
+          await bluetoothPrint.printReceipt(config, list);
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Struk berhasil dicetak!'), backgroundColor: Colors.green),
+          );
+        } catch (e) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Gagal print: $e'), backgroundColor: Colors.red),
+          );
+        }
       }
-
-      list.add(LineText(type: LineText.TYPE_TEXT, content: '-------------------------------', linefeed: 1));
-      list.add(LineText(type: LineText.TYPE_TEXT, content: 'TOTAL: ${formatRupiah(order['total'])}', 
-        weight: 1, align: LineText.ALIGN_RIGHT, linefeed: 1));
-      list.add(LineText(type: LineText.TYPE_TEXT, content: '===============================', linefeed: 1));
-      list.add(LineText(type: LineText.TYPE_TEXT, content: 'Terima kasih 🙏', 
-        align: LineText.ALIGN_CENTER, linefeed: 2));
-
-      // 5. Print
-      await bluetoothPrint.printReceipt(config, list);
-      bluetoothPrint.disconnect();
-      
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Struk dicetak!'), backgroundColor: Colors.green),
+        SnackBar(content: Text('Printer tidak ditemukan'), backgroundColor: Colors.red),
       );
     }
   });
