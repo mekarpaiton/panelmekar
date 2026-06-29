@@ -7,6 +7,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'dart:io';
 import 'package:flutter/services.dart';
+import 'package:bluetooth_print/bluetooth_print.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 const String baseUrl = 'https://abahkhuzai.pythonanywhere.com';
 const Color warnaUtama = Color(0xFF7F00FF);
