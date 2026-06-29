@@ -938,3 +938,63 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
     );
   }
 }
+
+//================================
+//§ HALAMAN SETTING ADA 7 POINT  §
+//====================≠===========
+class HalamanSetting extends StatefulWidget {
+  @override
+  _HalamanSettingState createState() => _HalamanSettingState();
+}
+
+class _HalamanSettingState extends State<HalamanSetting> {
+  bool loading = false;
+
+  Future<void> generateLinkCacheBuster() async {
+    setState(() => loading = true);
+    String version = DateTime.now().millisecondsSinceEpoch.toString();
+    String linkBaru = "https://tbmekar.github.io/katalog.html?v=$version";
+
+    await Clipboard.setData(ClipboardData(text: linkBaru));
+
+    setState(() => loading = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Link v$version udah di-copy! Kirim ke customer'),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 4),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Setting'), backgroundColor: warnaUtama),
+      body: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Cache Buster Katalog', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            SizedBox(height: 8),
+            Text('Pencet tombol di bawah kalo abis update harga/produk. Biar HP customer nggak nge-cache katalog lama.',
+                style: TextStyle(color: Colors.grey[600])),
+            SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: loading? null : generateLinkCacheBuster,
+              icon: loading? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : Icon(Icons.link),
+              label: Text(loading? 'Generate...' : 'Generate Link Katalog Terbaru'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: warnaUtama,
+                foregroundColor: Colors.white,
+                minimumSize: Size(double.infinity, 50),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
