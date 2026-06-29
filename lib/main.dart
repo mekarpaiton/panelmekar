@@ -542,16 +542,19 @@ class FormProduk extends StatefulWidget {
   State<FormProduk> createState() => _FormProdukState();
 }
 
+import 'package:image_picker/image_picker.dart'; // ← PASTIIN IMPORT INI ADA DI ATAS FILE
+
 class _FormProdukState extends State<FormProduk> {
   final _formKey = GlobalKey<FormState>();
   final namaCtrl = TextEditingController();
-  final fotoCtrl = TextEditingController();
   final stokCtrl = TextEditingController();
   final hargaCtrl = TextEditingController();
 
   String kategori = 'Semen';
   String satuan = 'sak';
+  String fotoUrl = ''; // ← GANTI DARI fotoCtrl
   bool isLoading = false;
+  bool uploadLoading = false; // ← BUAT LOADING UPLOAD
 
   final listKategori = ['Semen', 'Cat', 'Pipa', 'Besi', 'Keramik', 'Lainnya'];
   final listSatuan = ['sak', 'kg', 'batang', 'dus', 'kaleng', 'm2', 'pcs'];
@@ -559,27 +562,62 @@ class _FormProdukState extends State<FormProduk> {
   @override
   void initState() {
     super.initState();
-    // Kalo edit, isi form pake data lama
     if (widget.produk!= null) {
       namaCtrl.text = widget.produk!['nama'];
-      fotoCtrl.text = widget.produk!['foto'];
+      fotoUrl = widget.produk!['foto']; // ← LANGSUNG KE fotoUrl
       stokCtrl.text = widget.produk!['stok'].toString();
       kategori = widget.produk!['kategori'];
       satuan = widget.produk!['satuan'];
-
-      // Ambil harga pertama
       final hargaData = widget.produk!['harga'];
       final hargaMap = hargaData is String? json.decode(hargaData) : hargaData;
       hargaCtrl.text = hargaMap.values.first.toString();
     }
   }
 
+  // FUNGSI AUTO UPLOAD BARU
+  Future<void> pilihDanUploadFoto() async {
+    final picker = ImagePicker();
+    final XFile? file = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+    if (file == null) return;
+
+    setState(() => uploadLoading = true);
+
+    try {
+      var request = http.MultipartRequest('POST', Uri.parse('https://freeimage.host/api/1/upload'));
+      request.fields['key'] = '6d207e02198a847aa98d0a2a901485a5';
+      request.files.add(await http.MultipartFile.fromPath('source', file.path));
+
+      var res = await request.send();
+      var responseData = await res.stream.toBytes();
+      var result = json.decode(utf8.decode(responseData));
+
+      if (result['status_code'] == 200) {
+        setState(() => fotoUrl = result['image']['url']);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Foto auto keupload Boss!'), backgroundColor: Colors.green),
+        );
+      } else {
+        throw Exception('Upload gagal');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+      );
+    } finally {
+      setState(() => uploadLoading = false);
+    }
+  }
+
   Future<void> simpanProduk() async {
     if (!_formKey.currentState!.validate()) return;
+    if (fotoUrl.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Upload foto dulu Boss'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
 
     setState(() => isLoading = true);
-
-    // Bikin format harga JSON
     Map hargaJson = {satuan: int.parse(hargaCtrl.text)};
 
     Map data = {
@@ -588,19 +626,17 @@ class _FormProdukState extends State<FormProduk> {
       'harga': json.encode(hargaJson),
       'stok': int.parse(stokCtrl.text),
       'satuan': satuan,
-      'foto': fotoCtrl.text,
+      'foto': fotoUrl, // ← PAKE fotoUrl OTOMATIS
     };
 
     try {
       if (widget.produk == null) {
-        // TAMBAH BARU
         await http.post(
           Uri.parse('$baseUrl/api/produk'),
           headers: {'Content-Type': 'application/json'},
           body: json.encode(data),
         );
       } else {
-        // EDIT
         await http.put(
           Uri.parse('$baseUrl/api/produk/${widget.produk!['id']}'),
           headers: {'Content-Type': 'application/json'},
@@ -608,8 +644,8 @@ class _FormProdukState extends State<FormProduk> {
         );
       }
 
-      widget.onSave(); // Refresh list
-      Navigator.pop(context); // Balik
+      widget.onSave();
+      Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(widget.produk == null? 'Produk ditambah' : 'Produk diupdate'),
@@ -637,7 +673,6 @@ class _FormProdukState extends State<FormProduk> {
         child: ListView(
           padding: EdgeInsets.all(16),
           children: [
-            // NAMA PRODUK
             TextFormField(
               controller: namaCtrl,
               decoration: InputDecoration(
@@ -649,7 +684,6 @@ class _FormProdukState extends State<FormProduk> {
             ),
             SizedBox(height: 16),
 
-            // KATEGORI
             DropdownButtonFormField(
               value: kategori,
               decoration: InputDecoration(
@@ -662,7 +696,6 @@ class _FormProdukState extends State<FormProduk> {
             ),
             SizedBox(height: 16),
 
-            // HARGA + SATUAN
             Row(
               children: [
                 Expanded(
@@ -694,7 +727,6 @@ class _FormProdukState extends State<FormProduk> {
             ),
             SizedBox(height: 16),
 
-            // STOK
             TextFormField(
               controller: stokCtrl,
               keyboardType: TextInputType.number,
@@ -707,23 +739,50 @@ class _FormProdukState extends State<FormProduk> {
             ),
             SizedBox(height: 16),
 
-            // URL FOTO
-            TextFormField(
-              controller: fotoCtrl,
-              decoration: InputDecoration(
-                labelText: 'URL Foto Produk',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.image),
-                hintText: 'https://...',
-              ),
-              validator: (v) => v!.isEmpty? 'Wajib' : null,
-            ),
+            // BAGIAN FOTO UDAH JADI TOMBOL AUTO UPLOAD
+            Text('Foto Produk', style: TextStyle(fontSize: 16, color: Colors.grey[700])),
             SizedBox(height: 8),
-            Text('Upload foto ke imgur.com / postimages.org, copy linknya',
-              style: TextStyle(fontSize: 12, color: Colors.grey)),
+            fotoUrl.isEmpty
+          ? Container(
+                  width: double.infinity,
+                  height: 120,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: InkWell(
+                    onTap: uploadLoading? null : pilihDanUploadFoto,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        uploadLoading
+                      ? CircularProgressIndicator()
+                        : Icon(Icons.add_a_photo, size: 40, color: warnaUtama),
+                        SizedBox(height: 8),
+                        Text(uploadLoading? 'Uploading...' : 'Pilih Foto dari HP'),
+                        Text('Otomatis keupload', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      ],
+                    ),
+                  ),
+                )
+              : Column(children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(fotoUrl, height: 150, width: double.infinity, fit: BoxFit.cover),
+                  ),
+                  SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.check_circle, color: Colors.green, size: 16),
+                      SizedBox(width: 4),
+                      Text('Foto udah online', style: TextStyle(color: Colors.green)),
+                      TextButton(onPressed: () => setState(() => fotoUrl = ''), child: Text('Ganti Foto')),
+                    ],
+                  ),
+                ]),
             SizedBox(height: 24),
 
-            // TOMBOL SIMPAN
             SizedBox(
               width: double.infinity,
               height: 50,
@@ -731,7 +790,7 @@ class _FormProdukState extends State<FormProduk> {
                 onPressed: isLoading? null : simpanProduk,
                 style: ElevatedButton.styleFrom(backgroundColor: warnaUtama),
                 child: isLoading
-            ? CircularProgressIndicator(color: Colors.white)
+          ? CircularProgressIndicator(color: Colors.white)
                     : Text(widget.produk == null? 'TAMBAH PRODUK' : 'UPDATE PRODUK',
                         style: TextStyle(color: Colors.white, fontSize: 16)),
               ),
@@ -742,7 +801,6 @@ class _FormProdukState extends State<FormProduk> {
     );
   }
 }
-
 // 5. HALAMAN LAPORAN + EXPORT EXCEL
 class HalamanHistory extends StatefulWidget {
   @override
