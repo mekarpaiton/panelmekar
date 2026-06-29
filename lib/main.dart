@@ -9,6 +9,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:bluetooth_print/bluetooth_print.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:image_picker/image_picker.dart;
 
 const String baseUrl = 'https://abahkhuzai.pythonanywhere.com';
 const Color warnaUtama = Color(0xFF7F00FF);
