@@ -157,6 +157,63 @@ class _HalamanOrderState extends State<HalamanOrder> {
     getOrders();
   }
 
+// FUNGSI PRINT THERMAL
+Future<void> printStruk(Map order) async {
+  // 1. Minta izin Bluetooth
+  await Permission.bluetoothScan.request();
+  await Permission.bluetoothConnect.request();
+
+  // 2. Scan printer
+  bluetoothPrint.startScan(timeout: Duration(seconds: 4));
+
+  // 3. Pilih printer - Dialog
+  bluetoothPrint.scanResults.listen((devices) async {
+    if (devices.isNotEmpty) {
+      // Ambil printer pertama yg ketemu
+      _device = devices.first;
+      await bluetoothPrint.connect(_device!);
+
+      // 4. Bikin struk
+      Map<String, dynamic> config = {};
+      List<LineText> list = [];
+
+      list.add(LineText(type: LineText.TYPE_TEXT, content: 'TB. MEKAR', 
+        weight: 1, align: LineText.ALIGN_CENTER, linefeed: 1));
+      list.add(LineText(type: LineText.TYPE_TEXT, content: 'Jl. Probolinggo No.1', 
+        align: LineText.ALIGN_CENTER, linefeed: 1));
+      list.add(LineText(type: LineText.TYPE_TEXT, content: 'Telp: 0812-xxxx-xxxx', 
+        align: LineText.ALIGN_CENTER, linefeed: 1));
+      list.add(LineText(type: LineText.TYPE_TEXT, content: '===============================', linefeed: 1));
+      list.add(LineText(type: LineText.TYPE_TEXT, content: 'ID: ${order['id']}', linefeed: 1));
+      list.add(LineText(type: LineText.TYPE_TEXT, content: 'Tgl: ${order['created_at']}', linefeed: 1));
+      list.add(LineText(type: LineText.TYPE_TEXT, content: 'Nama: ${order['nama_pembeli']}', linefeed: 1));
+      list.add(LineText(type: LineText.TYPE_TEXT, content: '-------------------------------', linefeed: 1));
+
+      for (var item in order['items']) {
+        list.add(LineText(type: LineText.TYPE_TEXT, content: '${item['nama']}', linefeed: 1));
+        list.add(LineText(type: LineText.TYPE_TEXT, 
+          content: '${item['qty']} x ${formatRupiah(item['harga'])} = ${formatRupiah(item['harga'] * item['qty'])}', 
+          align: LineText.ALIGN_RIGHT, linefeed: 1));
+      }
+
+      list.add(LineText(type: LineText.TYPE_TEXT, content: '-------------------------------', linefeed: 1));
+      list.add(LineText(type: LineText.TYPE_TEXT, content: 'TOTAL: ${formatRupiah(order['total'])}', 
+        weight: 1, align: LineText.ALIGN_RIGHT, linefeed: 1));
+      list.add(LineText(type: LineText.TYPE_TEXT, content: '===============================', linefeed: 1));
+      list.add(LineText(type: LineText.TYPE_TEXT, content: 'Terima kasih 🙏', 
+        align: LineText.ALIGN_CENTER, linefeed: 2));
+
+      // 5. Print
+      await bluetoothPrint.printReceipt(config, list);
+      bluetoothPrint.disconnect();
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Struk dicetak!'), backgroundColor: Colors.green),
+      );
+    }
+  });
+}
+
   Future<void> getOrders() async {
     try {
       final res = await http.get(Uri.parse('$baseUrl/api/orders'));
