@@ -162,7 +162,6 @@ class _HalamanOrderState extends State<HalamanOrder> {
 
 // FUNGSI PRINT THERMAL
 Future<void> printStruk(Map order) async {
-  // 1. Cek Bluetooth nyala
   bool enabled = await PrintBluetoothThermal.bluetoothEnabled;
   if (!enabled) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -171,29 +170,22 @@ Future<void> printStruk(Map order) async {
     return;
   }
 
-  // 2. Tampilkan Loading
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (_) => Center(child: CircularProgressIndicator()),
-  );
+  showDialog(context: context, barrierDismissible: false, builder: (_) => Center(child: CircularProgressIndicator()));
 
-  // 3. Ambil printer yg udah di-pairing
   List<BluetoothInfo> devices = await PrintBluetoothThermal.pairedBluetooths;
-  Navigator.pop(context); // Tutup loading
+  Navigator.pop(context);
 
   if (devices.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Printer belum di-pairing di Bluetooth HP'), backgroundColor: Colors.red),
+      SnackBar(content: Text('Printer belum di-pairing'), backgroundColor: Colors.red),
     );
     return;
   }
 
-  // 4. Pilih Printer
   BluetoothInfo? selected = await showDialog(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: Text('Pilih Printer Bluetooth'),
+      title: Text('Pilih Printer'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: devices.map((d) => ListTile(
@@ -203,50 +195,48 @@ Future<void> printStruk(Map order) async {
           onTap: () => Navigator.pop(ctx, d),
         )).toList(),
       ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Batal')),
-      ],
     ),
   );
 
   if (selected == null) return;
 
   try {
-    // 5. Connect ke printer
     bool connected = await PrintBluetoothThermal.connect(macPrinterAddress: selected.macAdress);
-    if (!connected) throw Exception('Gagal konek ke printer');
+    if (!connected) throw Exception('Gagal konek');
 
-    // 6. Bikin struk - HASIL CETAK SAMA PERSIS KAYA KODE LAMA
+    // BIKIN STRUK PAKE esc_pos_utils_flutter
+    final profile = await CapabilityProfile.load();
+    final generator = Generator(PaperSize.mm58, profile);
+    List<int> bytes = [];
+
     String idStr = order['id'].toString();
     String displayId = idStr.length > 8 ? idStr.substring(0, 8) : idStr;
 
-    List<int> bytes = [];
-    bytes += PrintBluetoothThermal.generatorText(content: 'TB MEKAR', size: 2, align: PrintAlign.center);
-    bytes += PrintBluetoothThermal.generatorText(content: 'Probolinggo', align: PrintAlign.center);
-    bytes += PrintBluetoothThermal.generatorText(content: '------------------------------');
-    bytes += PrintBluetoothThermal.generatorText(content: 'Order: $displayId');
-    bytes += PrintBluetoothThermal.generatorText(content: 'Tgl: ${order['tanggal']}');
-    bytes += PrintBluetoothThermal.generatorText(content: '------------------------------');
+    bytes += generator.text('TB MEKAR', styles: PosStyles(align: PosAlign.center, height: PosTextSize.size2, width: PosTextSize.size2));
+    bytes += generator.text('Probolinggo', styles: PosStyles(align: PosAlign.center));
+    bytes += generator.text('------------------------------');
+    bytes += generator.text('Order: $displayId');
+    bytes += generator.text('Tgl: ${order['tanggal']}');
+    bytes += generator.text('------------------------------');
 
     for (var item in order['items']) {
-      bytes += PrintBluetoothThermal.generatorText(content: item['nama']);
-      bytes += PrintBluetoothThermal.generatorText(
-        content: ' ${item['qty']} x ${formatRupiah(item['harga'])} = ${formatRupiah(item['qty'] * item['harga'])}',
+      bytes += generator.text(item['nama']);
+      bytes += generator.text(
+        ' ${item['qty']} x ${formatRupiah(item['harga'])} = ${formatRupiah(item['qty'] * item['harga'])}',
+        styles: PosStyles(align: PosAlign.right),
       );
     }
 
-    bytes += PrintBluetoothThermal.generatorText(content: '------------------------------');
-    bytes += PrintBluetoothThermal.generatorText(
-      content: 'TOTAL: ${formatRupiah(order['total'])}',
-      size: 1,
-      bold: true,
-      align: PrintAlign.right,
+    bytes += generator.text('------------------------------');
+    bytes += generator.text(
+      'TOTAL: ${formatRupiah(order['total'])}',
+      styles: PosStyles(align: PosAlign.right, bold: true),
     );
-    bytes += PrintBluetoothThermal.generatorText(content: ''); 
-    bytes += PrintBluetoothThermal.generatorText(content: '');
-    bytes += PrintBluetoothThermal.generatorText(content: 'Terima Kasih', align: PrintAlign.center, line: 3);
+    bytes += generator.feed(2);
+    bytes += generator.text('Terima Kasih', styles: PosStyles(align: PosAlign.center));
+    bytes += generator.feed(3);
+    bytes += generator.cut();
 
-    // 7. Kirim ke printer
     await PrintBluetoothThermal.writeBytes(bytes);
 
     ScaffoldMessenger.of(context).showSnackBar(
