@@ -150,9 +150,10 @@ class _HalamanOrderState extends State<HalamanOrder> {
   List orders = [];
   bool loading = true;
   final listStatus = ['Baru', 'Diproses', 'Selesai', 'Batal'];
-  final BluetoothPrint bluetoothPrint = BluetoothPrint.instance;
-  bool _connected = false;
-  BluetoothDevice? _device;
+  List orders = [];
+bool loading = true;
+final listStatus = ['Baru', 'Diproses', 'Selesai', 'Batal'];
+bool _connected = false;
 
   @override
   void initState() {
