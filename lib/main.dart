@@ -7,7 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'dart:io';
 import 'package:flutter/services.dart';
-import 'package:bluetooth_print/bluetooth_print.dart';
+import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:image_picker/image_picker.dart';
 
