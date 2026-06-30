@@ -8,7 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
-import 'package:esc_pos_utils/esc_pos_utils.dart';  //
+import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';  //
 import 'package:permission_handler/permission_handler.dart';
 import 'package:image_picker/image_picker.dart';
 
