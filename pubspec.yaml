@@ -17,7 +17,7 @@ dependencies:
   excel: 4.0.2
   path_provider: 2.1.2
   share_plus: 6.3.4
-  print_bluetooth_thermal: ^3.0.0
+  print_bluetooth_thermal: ^1.2.1
   permission_handler: 10.4.5
   image_picker: 1.0.7
   url_launcher: 6.2.4
