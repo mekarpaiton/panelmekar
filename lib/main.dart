@@ -390,6 +390,7 @@ Future<void> printStruk(Map o) async {
   )).toList(),
   onChanged: (String? v) => updateStatus(o['id'].toString(), v!),  // ← KASIH TIPE String?
  ),
+),
                           
 
                             // TOMBOL AKSI
