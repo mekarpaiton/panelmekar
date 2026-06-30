@@ -378,17 +378,18 @@ Future<void> printStruk(Map o) async {
                             // DROPDOWN STATUS
                             Padding(
                               padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              child: DropdownButtonFormField(
-                                value: status,
-                                decoration: InputDecoration(
-                                  labelText: 'Ubah Status',
-                                  border: OutlineInputBorder(),
-                                ),
-                                items: listStatus.map((s) => DropdownMenuItem(
-                                  value: s,
-                                  child: Text(s),
-                                )).toList(),
-                                onChanged: (v) => updateStatus(o['id'].toString(), v!),
+                              child: DropdownButtonFormField<String>(  // ← TAMBAH <String> DISINI
+  value: status,
+  decoration: InputDecoration(
+    labelText: 'Ubah Status',
+    border: OutlineInputBorder(),
+  ),
+  items: listStatus.map((String s) => DropdownMenuItem<String>(  // ← KASIH TIPE String
+    value: s,
+    child: Text(s),
+  )).toList(),
+  onChanged: (String? v) => updateStatus(o['id'].toString(), v!),  // ← KASIH TIPE String?
+)
                               ),
                             ),
 
