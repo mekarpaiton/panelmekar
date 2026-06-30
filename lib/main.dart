@@ -359,7 +359,7 @@ Future<void> printStruk(Map order) async {
                                   value: s,
                                   child: Text(s),
                                 )).toList(),
-                                onChanged: (v) => updateStatus(o['id'], v!),
+                                onChanged: (v) => updateStatus(o['id'].toString(), v!),
                               ),
                             ),
 
