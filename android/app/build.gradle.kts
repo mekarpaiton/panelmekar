@@ -32,7 +32,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.panelmekar"
-        minSdk = flutter.minSdkVersion
+        minSdk = 21
         targetSdk = flutter.targetSdkVersion
         versionCode = flutterVersionCode.toInt()
         versionName = flutterVersionName
