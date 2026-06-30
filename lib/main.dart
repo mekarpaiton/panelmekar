@@ -147,9 +147,7 @@ class HalamanOrder extends StatefulWidget {
 
 class _HalamanOrderState extends State<HalamanOrder> {
 
-  List orders = [];
-  bool loading = true;
-  final listStatus = ['Baru', 'Diproses', 'Selesai', 'Batal'];
+  
   List orders = [];
 bool loading = true;
 final listStatus = ['Baru', 'Diproses', 'Selesai', 'Batal'];
