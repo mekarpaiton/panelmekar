@@ -160,7 +160,8 @@ bool _connected = false;
   }
 
 // FUNGSI PRINT THERMAL
-Future<void> printStruk(Map order) async {
+Future<void> printStruk(Map o) async {
+  // 1. CEK BLUETOOTH NYALA
   bool enabled = await PrintBluetoothThermal.bluetoothEnabled;
   if (!enabled) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -169,81 +170,110 @@ Future<void> printStruk(Map order) async {
     return;
   }
 
-  showDialog(context: context, barrierDismissible: false, builder: (_) => Center(child: CircularProgressIndicator()));
+  // 2. KALO BELUM KONEK, MUNCULIN PILIH PRINTER
+  bool isConnected = await PrintBluetoothThermal.connectionStatus;
+  if (!isConnected) {
+    showDialog(context: context, barrierDismissible: false, builder: (_) => Center(child: CircularProgressIndicator()));
+    List<BluetoothInfo> devices = await PrintBluetoothThermal.pairedBluetooths;
+    Navigator.pop(context);
 
-  List<BluetoothInfo> devices = await PrintBluetoothThermal.pairedBluetooths;
-  Navigator.pop(context);
+    if (devices.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Printer belum di-pairing di HP'), backgroundColor: Colors.red),
+      );
+      return;
+    }
 
-  if (devices.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Printer belum di-pairing'), backgroundColor: Colors.red),
+    BluetoothInfo? selected = await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Pilih Printer', style: GoogleFonts.poppins()),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: devices.map((d) => ListTile(
+            leading: Icon(Icons.print),
+            title: Text(d.name, style: GoogleFonts.poppins()),
+            subtitle: Text(d.macAdress),
+            onTap: () => Navigator.pop(ctx, d),
+          )).toList(),
+        ),
+      ),
     );
-    return;
+
+    if (selected == null) return;
+
+    try {
+      bool connected = await PrintBluetoothThermal.connect(macPrinterAddress: selected.macAdress);
+      if (!connected) throw Exception('Gagal konek ke printer');
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal konek: $e'), backgroundColor: Colors.red),
+      );
+      return;
+    }
   }
 
-  BluetoothInfo? selected = await showDialog(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: Text('Pilih Printer'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: devices.map((d) => ListTile(
-          leading: Icon(Icons.print),
-          title: Text(d.name),
-          subtitle: Text(d.macAdress),
-          onTap: () => Navigator.pop(ctx, d),
-        )).toList(),
-      ),
-    ),
-  );
-
-  if (selected == null) return;
-
+  // 3. UDAH KONEK, LANGSUNG CETAK
   try {
-    bool connected = await PrintBluetoothThermal.connect(macPrinterAddress: selected.macAdress);
-    if (!connected) throw Exception('Gagal konek');
-
-    // BIKIN STRUK PAKE esc_pos_utils_flutter
     final profile = await CapabilityProfile.load();
     final generator = Generator(PaperSize.mm58, profile);
     List<int> bytes = [];
 
-    String idStr = order['id'].toString();
+    String idStr = o['id'].toString();
     String displayId = idStr.length > 8 ? idStr.substring(0, 8) : idStr;
 
-    bytes += generator.text('TB MEKAR', styles: PosStyles(align: PosAlign.center, height: PosTextSize.size2, width: PosTextSize.size2));
+    // HEADER TOKO - PAKE POPPINS BIAR VALUE++
+    bytes += generator.text('TB MEKAR', 
+        styles: PosStyles(align: PosAlign.center, height: PosTextSize.size2, width: PosTextSize.size2, bold: true));
     bytes += generator.text('Probolinggo', styles: PosStyles(align: PosAlign.center));
-    bytes += generator.text('------------------------------');
+    bytes += generator.hr();
+
+    // DATA ORDER
     bytes += generator.text('Order: $displayId');
-    bytes += generator.text('Tgl: ${order['tanggal']}');
-    bytes += generator.text('------------------------------');
+    bytes += generator.text('Tgl: ${o['tanggal'] ?? DateFormat('dd-MM-yy HH:mm').format(DateTime.parse(o['created_at']))}');
+    bytes += generator.text('Kasir: Admin');
+    bytes += generator.hr();
 
-    for (var item in order['items']) {
+    // ITEM
+    final items = o['items'] is String ? jsonDecode(o['items']) : o['items'];
+    int total = 0;
+    for (var item in items) {
+      int harga = int.parse(item['harga'].toString());
+      int qty = int.parse(item['qty'].toString());
+      int subtotal = qty * harga;
+      total += subtotal;
       bytes += generator.text(item['nama']);
-      bytes += generator.text(
-        ' ${item['qty']} x ${formatRupiah(item['harga'])} = ${formatRupiah(item['qty'] * item['harga'])}',
-        styles: PosStyles(align: PosAlign.right),
-      );
+      bytes += generator.row([
+        PosColumn(text: '$qty x ${formatRupiah(harga)}', width: 6),
+        PosColumn(text: formatRupiah(subtotal), width: 6, styles: PosStyles(align: PosAlign.right)),
+      ]);
     }
+    bytes += generator.hr();
 
-    bytes += generator.text('------------------------------');
-    bytes += generator.text(
-      'TOTAL: ${formatRupiah(order['total'])}',
-      styles: PosStyles(align: PosAlign.right, bold: true),
-    );
-    bytes += generator.feed(2);
+    // TOTAL
+    bytes += generator.row([
+      PosColumn(text: 'TOTAL', width: 6, styles: PosStyles(bold: true)),
+      PosColumn(text: formatRupiah(o['total'] ?? total), width: 6, styles: PosStyles(align: PosAlign.right, bold: true)),
+    ]);
+    bytes += generator.hr();
     bytes += generator.text('Terima Kasih', styles: PosStyles(align: PosAlign.center));
-    bytes += generator.feed(3);
+    bytes += generator.feed(2);
     bytes += generator.cut();
 
-    await PrintBluetoothThermal.writeBytes(bytes);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Struk berhasil dicetak!'), backgroundColor: Colors.green),
-    );
+    final result = await PrintBluetoothThermal.writeBytes(bytes);
+    
+    if (result == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Struk berhasil dicetak!'), backgroundColor: Colors.green),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal cetak Boss'), backgroundColor: Colors.red),
+      );
+    }
   } catch (e) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Gagal print: $e'), backgroundColor: Colors.red),
+      SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
     );
   }
 }
