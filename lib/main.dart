@@ -161,98 +161,101 @@ class _HalamanOrderState extends State<HalamanOrder> {
 
 // FUNGSI PRINT THERMAL
 Future<void> printStruk(Map order) async {
-  // CEK BLUETOOTH NYALA
-  bool? isOn = await bluetoothPrint.isOn;
-  if (isOn!= true) {
+  // 1. Cek Bluetooth nyala
+  bool enabled = await PrintBluetoothThermal.bluetoothEnabled;
+  if (!enabled) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Nyalain Bluetooth dulu Boss'), backgroundColor: Colors.red),
     );
     return;
   }
 
-  // LOADING
+  // 2. Tampilkan Loading
   showDialog(
     context: context,
     barrierDismissible: false,
     builder: (_) => Center(child: CircularProgressIndicator()),
   );
 
-  // SCAN PRINTER
-  bluetoothPrint.startScan(timeout: Duration(seconds: 4));
+  // 3. Ambil printer yg udah di-pairing
+  List<BluetoothInfo> devices = await PrintBluetoothThermal.pairedBluetooths;
+  Navigator.pop(context); // Tutup loading
 
-  // DENGERIN HASIL + TAMPILIN DIALOG PILIH
-  bluetoothPrint.scanResults.listen((devices) async {
-    Navigator.pop(context); // Tutup loading
+  if (devices.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Printer belum di-pairing di Bluetooth HP'), backgroundColor: Colors.red),
+    );
+    return;
+  }
 
-    if (devices.isNotEmpty) {
-      BluetoothDevice? selected = await showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text('Pilih Printer Bluetooth'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: devices.map((d) => ListTile(
-              leading: Icon(Icons.print),
-              title: Text(d.name?? 'Unknown Device'),
-              subtitle: Text(d.address?? ''),
-              onTap: () => Navigator.pop(ctx, d),
-            )).toList(),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Batal')),
-          ],
-        ),
-      );
+  // 4. Pilih Printer
+  BluetoothInfo? selected = await showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text('Pilih Printer Bluetooth'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: devices.map((d) => ListTile(
+          leading: Icon(Icons.print),
+          title: Text(d.name),
+          subtitle: Text(d.macAdress),
+          onTap: () => Navigator.pop(ctx, d),
+        )).toList(),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Batal')),
+      ],
+    ),
+  );
 
-      if (selected!= null) {
-        try {
-          await bluetoothPrint.connect(selected);
+  if (selected == null) return;
 
-          // DATA STRUK
-          Map<String, dynamic> config = {};
-          List<LineText> list = [];
+  try {
+    // 5. Connect ke printer
+    bool connected = await PrintBluetoothThermal.connect(macPrinterAddress: selected.macAdress);
+    if (!connected) throw Exception('Gagal konek ke printer');
 
-          list.add(LineText(type: LineText.TYPE_TEXT, content: 'TB MEKAR',
-              weight: 1, align: LineText.ALIGN_CENTER, linefeed: 1));
-          list.add(LineText(type: LineText.TYPE_TEXT, content: 'Probolinggo',
-              align: LineText.ALIGN_CENTER, linefeed: 1));
-          list.add(LineText(type: LineText.TYPE_TEXT, content: '------------------------------', linefeed: 1));
-          list.add(LineText(type: LineText.TYPE_TEXT,
-              content: 'Order: ${order['id'].toString().substring(0,8)}', linefeed: 1));
-          list.add(LineText(type: LineText.TYPE_TEXT, content: 'Tgl: ${order['tanggal']}', linefeed: 1));
-          list.add(LineText(type: LineText.TYPE_TEXT, content: '------------------------------', linefeed: 1));
+    // 6. Bikin struk - HASIL CETAK SAMA PERSIS KAYA KODE LAMA
+    String idStr = order['id'].toString();
+    String displayId = idStr.length > 8 ? idStr.substring(0, 8) : idStr;
 
-          for (var item in order['items']) {
-            list.add(LineText(type: LineText.TYPE_TEXT, content: item['nama'], linefeed: 1));
-            list.add(LineText(type: LineText.TYPE_TEXT,
-                content: ' ${item['qty']} x ${formatRupiah(item['harga'])} = ${formatRupiah(item['qty'] * item['harga'])}',
-                linefeed: 1));
-          }
+    List<int> bytes = [];
+    bytes += PrintBluetoothThermal.generatorText(content: 'TB MEKAR', size: 2, align: PrintAlign.center);
+    bytes += PrintBluetoothThermal.generatorText(content: 'Probolinggo', align: PrintAlign.center);
+    bytes += PrintBluetoothThermal.generatorText(content: '------------------------------');
+    bytes += PrintBluetoothThermal.generatorText(content: 'Order: $displayId');
+    bytes += PrintBluetoothThermal.generatorText(content: 'Tgl: ${order['tanggal']}');
+    bytes += PrintBluetoothThermal.generatorText(content: '------------------------------');
 
-          list.add(LineText(type: LineText.TYPE_TEXT, content: '------------------------------', linefeed: 1));
-          list.add(LineText(type: LineText.TYPE_TEXT,
-              content: 'TOTAL: ${formatRupiah(order['total'])}',
-              weight: 1, align: LineText.ALIGN_RIGHT, linefeed: 2));
-          list.add(LineText(type: LineText.TYPE_TEXT,
-              content: 'Terima Kasih', align: LineText.ALIGN_CENTER, linefeed: 3));
-
-          await bluetoothPrint.printReceipt(config, list);
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Struk berhasil dicetak!'), backgroundColor: Colors.green),
-          );
-        } catch (e) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Gagal print: $e'), backgroundColor: Colors.red),
-          );
-        }
-      }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Printer tidak ditemukan'), backgroundColor: Colors.red),
+    for (var item in order['items']) {
+      bytes += PrintBluetoothThermal.generatorText(content: item['nama']);
+      bytes += PrintBluetoothThermal.generatorText(
+        content: ' ${item['qty']} x ${formatRupiah(item['harga'])} = ${formatRupiah(item['qty'] * item['harga'])}',
       );
     }
-  });
+
+    bytes += PrintBluetoothThermal.generatorText(content: '------------------------------');
+    bytes += PrintBluetoothThermal.generatorText(
+      content: 'TOTAL: ${formatRupiah(order['total'])}',
+      size: 1,
+      bold: true,
+      align: PrintAlign.right,
+    );
+    bytes += PrintBluetoothThermal.generatorText(content: ''); 
+    bytes += PrintBluetoothThermal.generatorText(content: '');
+    bytes += PrintBluetoothThermal.generatorText(content: 'Terima Kasih', align: PrintAlign.center, line: 3);
+
+    // 7. Kirim ke printer
+    await PrintBluetoothThermal.writeBytes(bytes);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Struk berhasil dicetak!'), backgroundColor: Colors.green),
+    );
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Gagal print: $e'), backgroundColor: Colors.red),
+    );
+  }
 }
 
   Future<void> getOrders() async {
