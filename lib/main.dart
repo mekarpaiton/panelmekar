@@ -830,20 +830,39 @@ class _HalamanHistoryState extends State<HalamanHistory> {
   }
 
   Future<void> exportExcel() async {
-    var excel = Excel.createExcel();
-    Sheet sheet = excel['Transaksi'];
-    sheet.appendRow(['ID', 'Tanggal', 'Nama', 'WA', 'Total', 'Item']);
+  var excel = ex.Excel.createExcel();
+  ex.Sheet sheet = excel['Transaksi'];
+  
+  // Header pake TextCellValue
+  sheet.appendRow([
+    ex.TextCellValue('ID'),
+    ex.TextCellValue('Tanggal'),
+    ex.TextCellValue('Nama'),
+    ex.TextCellValue('WA'),
+    ex.TextCellValue('Total'),
+    ex.TextCellValue('Item')
+  ]);
 
-    for (var o in orders) {
-      String items = o['items'].map((i) => '${i['nama']} x${i['qty']}').join(', ');
-      sheet.appendRow([o['id'], o['created_at'], o['nama_pembeli'], o['wa_pembeli'], o['total'], items]);
-    }
-
-    final dir = await getApplicationDocumentsDirectory();
-    final file = File('${dir.path}/history_tb_mekar.xlsx');
-    file.writeAsBytesSync(excel.encode()!);
-    Share.shareXFiles([XFile(file.path)], text: 'History Transaksi TB. MEKAR');
+  for (var o in orders) {
+    String items = o['items'].map((i) => '${i['nama']} x${i['qty']}').join(', ');
+    
+    // Semua data dibungkus CellValue sesuai tipe
+    sheet.appendRow([
+      ex.TextCellValue(o['id'].toString()), // ← .toString() biar aman
+      ex.TextCellValue(o['created_at'].toString()),
+      ex.TextCellValue(o['nama_pembeli'].toString()),
+      ex.TextCellValue(o['wa_pembeli'].toString()),
+      ex.IntCellValue(int.parse(o['total'].toString())), // ← Pake IntCellValue buat angka
+      ex.TextCellValue(items)
+    ]);
   }
+
+  final dir = await getApplicationDocumentsDirectory();
+  final file = File('${dir.path}/history_tb_mekar.xlsx');
+  file.writeAsBytesSync(excel.encode()!);
+  
+  await Share.shareXFiles([XFile(file.path)], text: 'History Transaksi TB. MEKAR');
+}
 
   @override
   Widget build(BuildContext context) {
