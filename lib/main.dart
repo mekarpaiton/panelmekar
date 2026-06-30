@@ -141,18 +141,16 @@ class _DashboardPanelState extends State<DashboardPanel> {
 }
 
 // 3. HALAMAN PESANAN - UDAH ADA STATUS
+// 3. HALAMAN PESANAN - VERSI ANTI-CRASH
 class HalamanOrder extends StatefulWidget {
   @override
   State<HalamanOrder> createState() => _HalamanOrderState();
 }
 
 class _HalamanOrderState extends State<HalamanOrder> {
-
-  
   List orders = [];
-bool loading = true;
-final listStatus = ['Baru', 'Diproses', 'Selesai', 'Batal'];
-bool _connected = false;
+  bool loading = true;
+  final listStatus = ['Baru', 'Diproses', 'Selesai', 'Batal'];
 
   @override
   void initState() {
@@ -160,124 +158,138 @@ bool _connected = false;
     getOrders();
   }
 
-// FUNGSI PRINT THERMAL
-Future<void> printStruk(Map o) async {
-  // 1. CEK BLUETOOTH NYALA
-  bool enabled = await PrintBluetoothThermal.bluetoothEnabled;
-  if (!enabled) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Nyalain Bluetooth dulu Boss'), backgroundColor: Colors.red),
-    );
-    return;
-  }
+  // FUNGSI PRINT THERMAL + EXPANDED RUNTIME PERMISSION
+  Future<void> printStruk(Map o) async {
+    // Request Izin Bluetooth Runtime (Wajib buat Android 12+)
+    if (Platform.isAndroid) {
+      Map<Permission, PermissionStatus> statuses = await [
+        Permission.bluetoothConnect,
+        Permission.bluetoothScan,
+      ].request();
+      
+      if (statuses[Permission.bluetoothConnect] != PermissionStatus.granted ||
+          statuses[Permission.bluetoothScan] != PermissionStatus.granted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Izin Bluetooth ditolak Boss, aktifkan di setting HP!'), backgroundColor: Colors.red),
+        );
+        return;
+      }
+    }
 
-  // 2. KALO BELUM KONEK, MUNCULIN PILIH PRINTER
-  bool isConnected = await PrintBluetoothThermal.connectionStatus;
-  if (!isConnected) {
-    showDialog(context: context, barrierDismissible: false, builder: (_) => Center(child: CircularProgressIndicator()));
-    List<BluetoothInfo> devices = await PrintBluetoothThermal.pairedBluetooths;
-    Navigator.pop(context);
-
-    if (devices.isEmpty) {
+    // CEK BLUETOOTH NYALA
+    bool enabled = await PrintBluetoothThermal.bluetoothEnabled;
+    if (!enabled) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Printer belum di-pairing di HP'), backgroundColor: Colors.red),
+        SnackBar(content: Text('Nyalain Bluetooth dulu Boss'), backgroundColor: Colors.red),
       );
       return;
     }
 
-    BluetoothInfo? selected = await showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Pilih Printer', style: GoogleFonts.poppins()),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: devices.map((d) => ListTile(
-            leading: Icon(Icons.print),
-            title: Text(d.name, style: GoogleFonts.poppins()),
-            subtitle: Text(d.macAdress),
-            onTap: () => Navigator.pop(ctx, d),
-          )).toList(),
+    // KALO BELUM KONEK, MUNCULIN PILIH PRINTER
+    bool isConnected = await PrintBluetoothThermal.connectionStatus;
+    if (!isConnected) {
+      showDialog(context: context, barrierDismissible: false, builder: (_) => Center(child: CircularProgressIndicator()));
+      List<BluetoothInfo> devices = await PrintBluetoothThermal.pairedBluetooths;
+      Navigator.pop(context);
+
+      if (devices.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Printer belum di-pairing di HP'), backgroundColor: Colors.red),
+        );
+        return;
+      }
+
+      BluetoothInfo? selected = await showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('Pilih Printer', style: GoogleFonts.poppins()),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: devices.map((d) => ListTile(
+              leading: Icon(Icons.print),
+              title: Text(d.name, style: GoogleFonts.poppins()),
+              subtitle: Text(d.macAdress),
+              onTap: () => Navigator.pop(ctx, d),
+            )).toList(),
+          ),
         ),
-      ),
-    );
+      );
 
-    if (selected == null) return;
+      if (selected == null) return;
 
+      try {
+        bool connected = await PrintBluetoothThermal.connect(macPrinterAddress: selected.macAdress);
+        if (!connected) throw Exception('Gagal konek ke printer');
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal konek: $e'), backgroundColor: Colors.red),
+        );
+        return;
+      }
+    }
+
+    // PROSES CETAK STRUK
     try {
-      bool connected = await PrintBluetoothThermal.connect(macPrinterAddress: selected.macAdress);
-      if (!connected) throw Exception('Gagal konek ke printer');
+      final profile = await CapabilityProfile.load();
+      final generator = Generator(PaperSize.mm58, profile);
+      List<int> bytes = [];
+
+      String idStr = o['id'].toString();
+      String displayId = idStr.length > 8 ? idStr.substring(0, 8) : idStr;
+
+      bytes += generator.text('TB MEKAR', 
+          styles: PosStyles(align: PosAlign.center, height: PosTextSize.size2, width: PosTextSize.size2, bold: true));
+      bytes += generator.text('Probolinggo', styles: PosStyles(align: PosAlign.center));
+      bytes += generator.hr();
+
+      bytes += generator.text('Order: $displayId');
+      bytes += generator.text('Tgl: ${o['tanggal'] ?? DateFormat('dd-MM-yy HH:mm').format(DateTime.parse(o['created_at']))}');
+      bytes += generator.text('Kasir: Admin');
+      bytes += generator.hr();
+
+      // PENGAMAN PARSING ITEMS DI PRINTER
+      final rawItems = o['items'];
+      final List itemsList = rawItems is String ? jsonDecode(rawItems) : rawItems;
+      
+      int total = 0;
+      for (var item in itemsList) {
+        int harga = int.parse(item['harga'].toString());
+        int qty = int.parse(item['qty'].toString());
+        int subtotal = qty * harga;
+        total += subtotal;
+        bytes += generator.text(item['nama']);
+        bytes += generator.row([
+          PosColumn(text: '$qty x ${formatRupiah(harga)}', width: 6),
+          PosColumn(text: formatRupiah(subtotal), width: 6, styles: PosStyles(align: PosAlign.right)),
+        ]);
+      }
+      bytes += generator.hr();
+
+      bytes += generator.row([
+        PosColumn(text: 'TOTAL', width: 6, styles: PosStyles(bold: true)),
+        PosColumn(text: formatRupiah(o['total'] != null ? int.parse(o['total'].toString()) : total), width: 6, styles: PosStyles(align: PosAlign.right, bold: true)),
+      ]);
+      bytes += generator.hr();
+      bytes += generator.text('Terima Kasih', styles: PosStyles(align: PosAlign.center));
+      bytes += generator.feed(2);
+      bytes += generator.cut();
+
+      final result = await PrintBluetoothThermal.writeBytes(bytes);
+      if (result == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Struk berhasil dicetak!'), backgroundColor: Colors.green),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal cetak Boss'), backgroundColor: Colors.red),
+        );
+      }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal konek: $e'), backgroundColor: Colors.red),
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
       );
-      return;
     }
   }
-
-  // 3. UDAH KONEK, LANGSUNG CETAK
-  try {
-    final profile = await CapabilityProfile.load();
-    final generator = Generator(PaperSize.mm58, profile);
-    List<int> bytes = [];
-
-    String idStr = o['id'].toString();
-    String displayId = idStr.length > 8 ? idStr.substring(0, 8) : idStr;
-
-    // HEADER TOKO - PAKE POPPINS BIAR VALUE++
-    bytes += generator.text('TB MEKAR', 
-        styles: PosStyles(align: PosAlign.center, height: PosTextSize.size2, width: PosTextSize.size2, bold: true));
-    bytes += generator.text('Probolinggo', styles: PosStyles(align: PosAlign.center));
-    bytes += generator.hr();
-
-    // DATA ORDER
-    bytes += generator.text('Order: $displayId');
-    bytes += generator.text('Tgl: ${o['tanggal'] ?? DateFormat('dd-MM-yy HH:mm').format(DateTime.parse(o['created_at']))}');
-    bytes += generator.text('Kasir: Admin');
-    bytes += generator.hr();
-
-    // ITEM
-    final items = o['items'] is String ? jsonDecode(o['items']) : o['items'];
-    int total = 0;
-    for (var item in items) {
-      int harga = int.parse(item['harga'].toString());
-      int qty = int.parse(item['qty'].toString());
-      int subtotal = qty * harga;
-      total += subtotal;
-      bytes += generator.text(item['nama']);
-      bytes += generator.row([
-        PosColumn(text: '$qty x ${formatRupiah(harga)}', width: 6),
-        PosColumn(text: formatRupiah(subtotal), width: 6, styles: PosStyles(align: PosAlign.right)),
-      ]);
-    }
-    bytes += generator.hr();
-
-    // TOTAL
-    bytes += generator.row([
-      PosColumn(text: 'TOTAL', width: 6, styles: PosStyles(bold: true)),
-      PosColumn(text: formatRupiah(o['total'] ?? total), width: 6, styles: PosStyles(align: PosAlign.right, bold: true)),
-    ]);
-    bytes += generator.hr();
-    bytes += generator.text('Terima Kasih', styles: PosStyles(align: PosAlign.center));
-    bytes += generator.feed(2);
-    bytes += generator.cut();
-
-    final result = await PrintBluetoothThermal.writeBytes(bytes);
-    
-    if (result == true) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Struk berhasil dicetak!'), backgroundColor: Colors.green),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal cetak Boss'), backgroundColor: Colors.red),
-      );
-    }
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-    );
-  }
-}
 
   Future<void> getOrders() async {
     try {
@@ -295,14 +307,13 @@ Future<void> printStruk(Map o) async {
     return NumberFormat.currency(locale: 'id', symbol: 'Rp ', decimalDigits: 0).format(angka);
   }
 
-  // UBAH STATUS ORDER
   Future<void> updateStatus(String orderId, String statusBaru) async {
     await http.put(
       Uri.parse('$baseUrl/api/orders/$orderId/status'),
       headers: {'Content-Type': 'application/json'},
       body: json.encode({'status': statusBaru}),
     );
-    getOrders(); // Refresh
+    getOrders(); 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Status diubah: $statusBaru'), backgroundColor: Colors.green),
     );
@@ -318,19 +329,26 @@ Future<void> printStruk(Map o) async {
     }
   }
 
+  // PENGAMAN PARSING ITEMS DI COPY WHATSAPP
   void copyStrukWA(Map order) {
     String struk = "🧾 *STRUK TB. MEKAR*\n";
     struk += "ID: ${order['id']}\n";
     struk += "Tgl: ${order['created_at']}\n";
     struk += "Nama: ${order['nama_pembeli']}\n";
-    struk += "Status: ${order['status']?? 'Baru'}\n";
+    struk += "Status: ${order['status'] ?? 'Baru'}\n";
     struk += "------------------------\n";
-    for (var item in order['items']) {
-      struk += "${item['nama']} x${item['qty']}\n";
-      struk += " ${formatRupiah(item['harga'] * item['qty'])}\n";
+    
+    final rawItems = order['items'];
+    final List itemsList = rawItems is String ? jsonDecode(rawItems) : rawItems;
+
+    for (var item in itemsList) {
+      int harga = int.parse(item['harga'].toString());
+      int qty = int.parse(item['qty'].toString());
+      struk += "${item['nama']} x$qty\n";
+      struk += " ${formatRupiah(harga * qty)}\n";
     }
     struk += "------------------------\n";
-    struk += "*TOTAL: ${formatRupiah(order['total'])}*\n\n";
+    struk += "*TOTAL: ${formatRupiah(int.parse(order['total'].toString()))}*\n\n";
     struk += "Terima kasih 🙏";
 
     Clipboard.setData(ClipboardData(text: struk));
@@ -344,82 +362,98 @@ Future<void> printStruk(Map o) async {
     return Scaffold(
       appBar: AppBar(title: Text('Pesanan Masuk'), backgroundColor: warnaUtama),
       body: loading
- ? Center(child: CircularProgressIndicator())
-        : RefreshIndicator(
-            onRefresh: getOrders,
-            child: orders.isEmpty
-       ? Center(child: Text('Belum ada pesanan'))
-                : ListView.builder(
-                    itemCount: orders.length,
-                    itemBuilder: (ctx, i) {
-                      final o = orders[i];
-                      final status = o['status']?? 'Baru';
+          ? Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: getOrders,
+              child: orders.isEmpty
+                  ? Center(child: Text('Belum ada pesanan'))
+                  : ListView.builder(
+                      itemCount: orders.length,
+                      itemBuilder: (ctx, i) {
+                        final o = orders[i];
+                        
+                        // VALIDASI & NORMALISASI DROPDOWN VALUE (ANTI-ASSERTION ERROR)
+                        String rawStatus = o['status'] ?? 'Baru';
+                        String statusTervalidasi = 'Baru';
+                        for (var s in listStatus) {
+                          if (s.toLowerCase() == rawStatus.toString().toLowerCase().trim()) {
+                            statusTervalidasi = s;
+                            break;
+                          }
+                        }
 
-                      return Card(
-                        margin: EdgeInsets.all(8),
-                        child: ExpansionTile(
-                          leading: Container(
-                            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: warnaStatus(status),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(status, style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                          ),
-                          title: Text(o['nama_pembeli'], style: TextStyle(fontWeight: FontWeight.bold)),
-                          subtitle: Text('${o['id']} - ${formatRupiah(o['total'])}'),
-                          children: [
-                            // LIST ITEM
-                          ...o['items'].map<Widget>((item) => ListTile(
-                                  title: Text('${item['nama']} x${item['qty']}'),
-                                  trailing: Text(formatRupiah(item['harga'] * item['qty'])),
-                                )).toList(),
+                        // SAFE PARSING UNTUK LOOPING WIDGET UI
+                        final rawItems = o['items'];
+                        final List itemsList = rawItems is String ? jsonDecode(rawItems) : rawItems;
 
-                            // DROPDOWN STATUS
-                            Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              child: DropdownButtonFormField<String>(  // ← TAMBAH <String> DISINI
-  value: status,
-  decoration: InputDecoration(
-    labelText: 'Ubah Status',
-    border: OutlineInputBorder(),
-  ),
-  items: listStatus.map((String s) => DropdownMenuItem<String>(  // ← KASIH TIPE String
-    value: s,
-    child: Text(s),
-  )).toList(),
-  onChanged: (String? v) => updateStatus(o['id'].toString(), v!),  // ← KASIH TIPE String?
- ),
-),
-                          
-
-                            // TOMBOL AKSI
-                            Padding(
-                              padding: EdgeInsets.all(8),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                children: [
-                                  ElevatedButton.icon(
-                                    onPressed: () => copyStrukWA(o),
-                                    icon: Icon(Icons.copy, size: 18),
-                                    label: Text('Copy WA'),
-                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                                  ),
-                                  ElevatedButton.icon(
-                                    onPressed: () => printStruk(o),
-                                    icon: Icon(Icons.print, size: 18),
-                                    label: Text('Print'),
-                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-                                  ),
-                                ],
+                        return Card(
+                          margin: EdgeInsets.all(8),
+                          child: ExpansionTile(
+                            leading: Container(
+                              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: warnaStatus(statusTervalidasi),
+                                borderRadius: BorderRadius.circular(12),
                               ),
+                              child: Text(statusTervalidasi, style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                             ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-          ),
+                            title: Text(o['nama_pembeli'] ?? 'Tanpa Nama', style: TextStyle(fontWeight: FontWeight.bold)),
+                            subtitle: Text('${o['id']} - ${formatRupiah(int.parse(o['total'].toString()))}'),
+                            children: [
+                              // LOOPING ITEM YANG SUDAH DI-PROTEKSI
+                              ...itemsList.map<Widget>((item) {
+                                int hrg = int.parse(item['harga'].toString());
+                                int qtypcl = int.parse(item['qty'].toString());
+                                return ListTile(
+                                  title: Text('${item['nama']} x$qtypcl'),
+                                  trailing: Text(formatRupiah(hrg * qtypcl)),
+                                );
+                              }).toList(),
+
+                              // DROPDOWN STATUS AMAN
+                              Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                child: DropdownButtonFormField<String>(
+                                  value: statusTervalidasi,
+                                  decoration: InputDecoration(
+                                    labelText: 'Ubah Status',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                  items: listStatus.map((String s) => DropdownMenuItem<String>(
+                                    value: s,
+                                    child: Text(s),
+                                  )).toList(),
+                                  onChanged: (String? v) => updateStatus(o['id'].toString(), v!),
+                                ),
+                              ),
+
+                              // TOMBOL AKSI
+                              Padding(
+                                padding: EdgeInsets.all(8),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                  children: [
+                                    ElevatedButton.icon(
+                                      onPressed: () => copyStrukWA(o),
+                                      icon: Icon(Icons.copy, size: 18),
+                                      label: Text('Copy WA'),
+                                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                                    ),
+                                    ElevatedButton.icon(
+                                      onPressed: () => printStruk(o),
+                                      icon: Icon(Icons.print, size: 18),
+                                      label: Text('Print'),
+                                      style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+            ),
     );
   }
 }
