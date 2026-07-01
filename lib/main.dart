@@ -1341,7 +1341,6 @@ class _HalamanSettingState extends State<HalamanSetting> {
   'assets/images/logomekar.svg',
   width: 45,
   height: 45,
-  color: warnaUtama,
 ),
             title: 'Info Toko',
             subtitle: 'Data ini nampil di struk & katalog',
