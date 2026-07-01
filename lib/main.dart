@@ -1019,7 +1019,7 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
   }
 }
 
-// 7. HALAMAN SETTING - LENGKAP 7 FITUR + ANTI CRASH
+// 7. HALAMAN SETTING - LENGKAP 7 FITUR + FIX BUILD ERROR
 class HalamanSetting extends StatefulWidget {
   @override
   State<HalamanSetting> createState() => _HalamanSettingState();
@@ -1075,7 +1075,7 @@ class _HalamanSettingState extends State<HalamanSetting> {
     FocusScope.of(context).unfocus();
   }
 
-  // 4. TEST PRINTER - PAKE PrintBluetoothThermal Biar Sama
+  // 4. TEST PRINTER - FIXED
   Future<void> testPrinter() async {
     try {
       await Permission.bluetoothScan.request();
@@ -1089,7 +1089,7 @@ class _HalamanSettingState extends State<HalamanSetting> {
 
       List<BluetoothInfo> devices = await PrintBluetoothThermal.pairedBluetooths;
       if (devices.isEmpty) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Printer belum di-pairing'), backgroundColor: Colors.red));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Printer belum di-pairing di HP'), backgroundColor: Colors.red));
         return;
       }
 
@@ -1112,7 +1112,7 @@ class _HalamanSettingState extends State<HalamanSetting> {
       if (selected == null) return;
 
       bool connected = await PrintBluetoothThermal.connect(macPrinterAddress: selected.macAdress);
-      if (!connected) throw Exception('Gagal konek');
+      if (!connected) throw Exception('Gagal konek ke printer');
 
       final profile = await CapabilityProfile.load();
       final generator = Generator(PaperSize.mm58, profile);
@@ -1124,14 +1124,14 @@ class _HalamanSettingState extends State<HalamanSetting> {
       bytes += generator.cut();
 
       await PrintBluetoothThermal.writeBytes(bytes);
-      await PrintBluetoothThermal.disconnect();
+      await PrintBluetoothThermal.disconnect; // <-- FIX: GA PAKE ()
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Test print berhasil'), backgroundColor: Colors.green));
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Printer error: $e'), backgroundColor: Colors.red));
     }
   }
 
-  // 5. BACKUP DATA - ANTI CRASH
+  // 5. BACKUP DATA - FIXED IMPORT EXCEL
   Future<void> backupProduk() async {
     try {
       final res = await http.get(Uri.parse('$baseUrl/api/produk')).timeout(Duration(seconds: 15));
@@ -1142,19 +1142,26 @@ class _HalamanSettingState extends State<HalamanSetting> {
 
       List produk = json.decode(res.body);
 
-      var excel = Excel.createExcel();
-      Sheet sheet = excel['Produk'];
-      sheet.appendRow(['ID', 'Nama', 'Kategori', 'Harga', 'Stok', 'Satuan']);
+      var excel = ex.Excel.createExcel(); // <-- FIX: ex.Excel
+      ex.Sheet sheet = excel['Produk']; // <-- FIX: ex.Sheet
+      sheet.appendRow([
+        ex.TextCellValue('ID'), // <-- FIX: ex.TextCellValue
+        ex.TextCellValue('Nama'),
+        ex.TextCellValue('Kategori'),
+        ex.TextCellValue('Harga'),
+        ex.TextCellValue('Stok'),
+        ex.TextCellValue('Satuan'),
+      ]);
 
       for (var p in produk) {
         final hargaMap = safeParseMap(p['harga']);
         sheet.appendRow([
-          TextCellValue(p['id']?.toString()?? ''),
-          TextCellValue(p['nama']?.toString()?? ''),
-          TextCellValue(p['kategori']?.toString()?? ''),
-          IntCellValue(hargaMap.values.isNotEmpty? hargaMap.values.first : 0),
-          IntCellValue(p['stok']?? 0),
-          TextCellValue(p['satuan']?.toString()?? ''),
+          ex.TextCellValue(p['id']?.toString()?? ''),
+          ex.TextCellValue(p['nama']?.toString()?? ''),
+          ex.TextCellValue(p['kategori']?.toString()?? ''),
+          ex.IntCellValue(hargaMap.values.isNotEmpty? hargaMap.values.first : 0), // <-- FIX: ex.IntCellValue
+          ex.IntCellValue(p['stok']?? 0),
+          ex.TextCellValue(p['satuan']?.toString()?? ''),
         ]);
       }
 
