@@ -464,7 +464,7 @@ class _HalamanOrderState extends State<HalamanOrder> {
   }
 }
 
-// 4. HALAMAN PRODUK
+// 4. HALAMAN PRODUK - KATEGORI DINAMIS + EDIT AKTIF
 class HalamanProduk extends StatefulWidget {
   @override
   State<HalamanProduk> createState() => _HalamanProdukState();
@@ -500,7 +500,7 @@ class _HalamanProdukState extends State<HalamanProduk> {
     }
   }
 
-  Future<void> hapusProduk(int id, String nama) async {
+  Future<void> hapusProduk(String id, String nama) async {
     bool? confirm = await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -528,8 +528,14 @@ class _HalamanProdukState extends State<HalamanProduk> {
     }
   }
 
-  void bukaFormProduk({Map? dataProduk}) {
-    Navigator.push(context, MaterialPageRoute(builder: (ctx) => FormProduk(produk: dataProduk, onSave: () => getProduk())));
+  void bukaFormProduk({Map? dataProduk}) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (ctx) => FormProduk(produk: dataProduk))
+    );
+    if (result == true) {
+      getProduk();
+    }
   }
 
   @override
@@ -537,51 +543,63 @@ class _HalamanProdukState extends State<HalamanProduk> {
     return Scaffold(
       appBar: AppBar(title: Text('Kelola Produk'), backgroundColor: warnaUtama),
       body: loading
-        ? Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: getProduk,
-              child: produk.isEmpty
-                ? Center(child: Text('Belum ada produk'))
-                  : ListView.builder(
-                      itemCount: produk.length,
-                      itemBuilder: (c, i) {
-                        final p = produk[i];
-                        final hargaMap = safeParseMap(p['harga']);
-                        final hargaPertama = hargaMap.values.isNotEmpty? hargaMap.values.first : 0;
-                        final stok = p['stok']?? 0;
+       ? Center(child: CircularProgressIndicator())
+        : RefreshIndicator(
+            onRefresh: getProduk,
+            child: produk.isEmpty
+             ? Center(child: Text('Belum ada produk'))
+              : ListView.builder(
+                  itemCount: produk.length,
+                  itemBuilder: (c, i) {
+                    final p = produk[i];
+                    final hargaMap = safeParseMap(p['harga']);
+                    final hargaPertama = hargaMap.values.isNotEmpty? hargaMap.values.first : 0;
+                    final stok = p['stok']?? 0;
 
-                        return Card(
-                          margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          child: ListTile(
-                            leading: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.network(p['foto']?.toString()?? '', width: 50, height: 50, fit: BoxFit.cover,
-                                  errorBuilder: (c, e, s) => Container(width: 50, height: 50, color: Colors.grey[300], child: Icon(Icons.image, color: Colors.grey))),
+                    return Card(
+                      margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      child: ListTile(
+                        leading: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(p['foto']?.toString()?? '', width: 50, height: 50, fit: BoxFit.cover,
+                              errorBuilder: (c, e, s) => Container(width: 50, height: 50, color: Colors.grey[300], child: Icon(Icons.image, color: Colors.grey))),
+                        ),
+                        title: Text(p['nama']?.toString()?? '', style: TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text('${formatTotal(hargaPertama)} / ${p['satuan']?? ''} - Stok: $stok'),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: Icon(Icons.edit, color: Colors.blue),
+                              onPressed: () => bukaFormProduk(dataProduk: p),
+                              tooltip: 'Edit Produk',
                             ),
-                            title: Text(p['nama']?.toString()?? '', style: TextStyle(fontWeight: FontWeight.bold)),
-                            subtitle: Text('${formatTotal(hargaPertama)} / ${p['satuan']?? ''} - Stok: $stok'),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(icon: Icon(Icons.edit, color: Colors.blue), onPressed: () => bukaFormProduk(dataProduk: p)),
-                                IconButton(icon: Icon(Icons.delete, color: Colors.red), onPressed: () => hapusProduk(p['id'], p['nama']?.toString()?? '')),
-                              ],
+                            IconButton(
+                              icon: Icon(Icons.delete, color: Colors.red),
+                              onPressed: () => hapusProduk(p['id'].toString(), p['nama']?.toString()?? ''),
+                              tooltip: 'Hapus Produk',
                             ),
-                          ),
-                        );
-                      },
-                    ),
-            ),
-      floatingActionButton: FloatingActionButton(onPressed: () => bukaFormProduk(), backgroundColor: warnaUtama, child: Icon(Icons.add)),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+          ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => bukaFormProduk(),
+        backgroundColor: warnaUtama,
+        child: Icon(Icons.add),
+        tooltip: 'Tambah Produk',
+      ),
     );
   }
 }
 
-// FORM PRODUK
+// FORM PRODUK - KATEGORI DINAMIS DARI API
 class FormProduk extends StatefulWidget {
   final Map? produk;
-  final VoidCallback onSave;
-  FormProduk({this.produk, required this.onSave});
+  FormProduk({this.produk});
 
   @override
   State<FormProduk> createState() => _FormProdukState();
@@ -592,23 +610,24 @@ class _FormProdukState extends State<FormProduk> {
   final namaCtrl = TextEditingController();
   final stokCtrl = TextEditingController();
   final hargaCtrl = TextEditingController();
-  String kategori = 'Semen';
+  String kategori = 'Lainnya';
   String satuan = 'sak';
   String fotoUrl = '';
   bool isLoading = false;
   bool uploadLoading = false;
-
-  final listKategori = ['Semen', 'Cat', 'Pipa', 'Besi', 'Keramik', 'Lainnya'];
+  List<String> listKategori = ['Lainnya'];
+  bool kategoriLoading = true;
   final listSatuan = ['sak', 'kg', 'batang', 'dus', 'kaleng', 'm2', 'pcs'];
 
   @override
   void initState() {
     super.initState();
+    getKategori();
     if (widget.produk!= null) {
       namaCtrl.text = widget.produk!['nama']?.toString()?? '';
       fotoUrl = widget.produk!['foto']?.toString()?? '';
       stokCtrl.text = widget.produk!['stok']?.toString()?? '0';
-      kategori = widget.produk!['kategori']?.toString()?? 'Semen';
+      kategori = widget.produk!['kategori']?.toString()?? 'Lainnya';
       satuan = widget.produk!['satuan']?.toString()?? 'sak';
 
       try {
@@ -617,6 +636,23 @@ class _FormProdukState extends State<FormProduk> {
       } catch (e) {
         hargaCtrl.text = '0';
       }
+    }
+  }
+
+  Future getKategori() async {
+    try {
+      final res = await http.get(Uri.parse('$baseUrl/api/kategori'));
+      if (!mounted) return;
+      final data = json.decode(res.body) as List;
+      setState(() {
+        listKategori = data.map((e) => e['nama'].toString()).toList();
+        if (listKategori.isEmpty) listKategori = ['Lainnya'];
+        if (!listKategori.contains(kategori)) kategori = listKategori.first;
+        kategoriLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => kategoriLoading = false);
     }
   }
 
@@ -659,12 +695,15 @@ class _FormProdukState extends State<FormProduk> {
     if (mounted) setState(() => isLoading = true);
     Map hargaJson = {satuan: int.parse(hargaCtrl.text)};
     Map data = {
+      'id': widget.produk?['id']?? 'PRD${DateTime.now().millisecondsSinceEpoch}',
       'nama': namaCtrl.text,
       'kategori': kategori,
+      'deskripsi': widget.produk?['deskripsi']?? '',
+      'foto': fotoUrl,
+      'satuan': satuan,
+      'varian': json.encode({}),
       'harga': json.encode(hargaJson),
       'stok': int.parse(stokCtrl.text),
-      'satuan': satuan,
-      'foto': fotoUrl,
     };
 
     try {
@@ -679,17 +718,25 @@ class _FormProdukState extends State<FormProduk> {
         res = await http.put(
           Uri.parse('$baseUrl/api/produk/${widget.produk!['id']}'),
           headers: {'Content-Type': 'application/json'},
-          body: json.encode(data),
+          body: json.encode({
+            'nama': namaCtrl.text,
+            'kategori': kategori,
+            'harga': json.encode(hargaJson),
+            'stok': int.parse(stokCtrl.text),
+            'satuan': satuan,
+            'foto': fotoUrl,
+          }),
         ).timeout(Duration(seconds: 15));
       }
 
       if (!mounted) return;
       if (res.statusCode!= 200 && res.statusCode!= 201) throw Exception('Server error ${res.statusCode}');
-      if (!res.headers['content-type']!.contains('application/json')) throw Exception('Response bukan JSON');
 
-      widget.onSave();
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(widget.produk == null? 'Produk ditambah' : 'Produk diupdate'), backgroundColor: Colors.green));
+      Navigator.pop(context, true);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(widget.produk == null? 'Produk ditambah' : 'Produk diupdate'),
+        backgroundColor: Colors.green
+      ));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
@@ -709,7 +756,14 @@ class _FormProdukState extends State<FormProduk> {
           children: [
             TextFormField(controller: namaCtrl, decoration: InputDecoration(labelText: 'Nama Produk', border: OutlineInputBorder(), prefixIcon: Icon(Icons.shopping_bag)), validator: (v) => v!.isEmpty? 'Wajib diisi' : null),
             SizedBox(height: 16),
-            DropdownButtonFormField(value: kategori, decoration: InputDecoration(labelText: 'Kategori', border: OutlineInputBorder(), prefixIcon: Icon(Icons.category)), items: listKategori.map((k) => DropdownMenuItem(value: k, child: Text(k))).toList(), onChanged: (v) => setState(() => kategori = v!)),
+            kategoriLoading
+             ? Center(child: CircularProgressIndicator())
+              : DropdownButtonFormField(
+                  value: kategori,
+                  decoration: InputDecoration(labelText: 'Kategori', border: OutlineInputBorder(), prefixIcon: Icon(Icons.category)),
+                  items: listKategori.map((k) => DropdownMenuItem(value: k, child: Text(k))).toList(),
+                  onChanged: (v) => setState(() => kategori = v!)
+                ),
             SizedBox(height: 16),
             Row(children: [
               Expanded(flex: 2, child: TextFormField(controller: hargaCtrl, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: 'Harga', border: OutlineInputBorder(), prefixIcon: Icon(Icons.attach_money)), validator: (v) => v!.isEmpty? 'Wajib' : null)),
@@ -722,8 +776,8 @@ class _FormProdukState extends State<FormProduk> {
             Text('Foto Produk', style: TextStyle(fontSize: 16, color: Colors.grey[700])),
             SizedBox(height: 8),
             fotoUrl.isEmpty
-              ? Container(width: double.infinity, height: 120, decoration: BoxDecoration(border: Border.all(color: Colors.grey), borderRadius: BorderRadius.circular(8)), child: InkWell(onTap: uploadLoading? null : pilihDanUploadFoto, child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [uploadLoading? CircularProgressIndicator() : Icon(Icons.add_a_photo, size: 40, color: warnaUtama), SizedBox(height: 8), Text(uploadLoading? 'Uploading...' : 'Pilih Foto dari HP'), Text('Otomatis keupload', style: TextStyle(fontSize: 12, color: Colors.grey))])) )
-                : Column(children: [ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(fotoUrl, height: 150, width: double.infinity, fit: BoxFit.cover)), SizedBox(height: 8), Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.check_circle, color: Colors.green, size: 16), SizedBox(width: 4), Text('Foto udah online', style: TextStyle(color: Colors.green)), TextButton(onPressed: () => setState(() => fotoUrl = ''), child: Text('Ganti Foto'))])]),
+             ? Container(width: double.infinity, height: 120, decoration: BoxDecoration(border: Border.all(color: Colors.grey), borderRadius: BorderRadius.circular(8)), child: InkWell(onTap: uploadLoading? null : pilihDanUploadFoto, child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [uploadLoading? CircularProgressIndicator() : Icon(Icons.add_a_photo, size: 40, color: warnaUtama), SizedBox(height: 8), Text(uploadLoading? 'Uploading...' : 'Pilih Foto dari HP'), Text('Otomatis keupload', style: TextStyle(fontSize: 12, color: Colors.grey))])))
+              : Column(children: [ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(fotoUrl, height: 150, width: double.infinity, fit: BoxFit.cover)), SizedBox(height: 8), Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.check_circle, color: Colors.green, size: 16), SizedBox(width: 4), Text('Foto udah online', style: TextStyle(color: Colors.green)), TextButton(onPressed: () => setState(() => fotoUrl = ''), child: Text('Ganti Foto'))])]),
             SizedBox(height: 24),
             SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: isLoading? null : simpanProduk, style: ElevatedButton.styleFrom(backgroundColor: warnaUtama), child: isLoading? CircularProgressIndicator(color: Colors.white) : Text(widget.produk == null? 'TAMBAH PRODUK' : 'UPDATE PRODUK', style: TextStyle(color: Colors.white, fontSize: 16)))),
           ],
