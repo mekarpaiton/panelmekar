@@ -723,30 +723,36 @@ class _HalamanHistoryState extends State<HalamanHistory> {
   }
 
   Future<void> getAllOrders() async {
-    try {
-      setState(() {
-        loading = true;
-        errorMsg = '';
-      });
-      
-      final res = await http.get(Uri.parse('$baseUrl/api/orders/all')).timeout(Duration(seconds: 15));
-      
-      if (res.statusCode == 200) {
-        setState(() {
-          orders = json.decode(res.body);
-          loading = false;
-        });
-      } else {
-        throw Exception('Server error: ${res.statusCode}');
-      }
-    } catch (e) {
-      print("LAPORAN ERROR: $e");
-      setState(() {
-        loading = false;
-        errorMsg = 'Gagal ambil data: $e';
-      });
+  try {
+    setState(() {
+      loading = true;
+      errorMsg = '';
+    });
+
+    final res = await http.get(Uri.parse('$baseUrl/api/orders/all')).timeout(Duration(seconds: 15));
+
+    // CEK 1: Status harus 200
+    if (res.statusCode != 200) {
+      throw Exception('Server error: ${res.statusCode}');
     }
+
+    // CEK 2: Pastiin JSON, bukan HTML
+    if (!res.headers['content-type']!.contains('application/json')) {
+      throw Exception('Server ngasih HTML, bukan JSON');
+    }
+
+    setState(() {
+      orders = json.decode(res.body);
+      loading = false;
+    });
+  } catch (e) {
+    print("LAPORAN ERROR: $e");
+    setState(() {
+      loading = false;
+      errorMsg = 'Gagal ambil data: $e';
+    });
   }
+}
 
   Future<void> exportExcel() async {
     if (orders.isEmpty) {
