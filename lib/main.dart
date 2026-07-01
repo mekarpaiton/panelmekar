@@ -1414,7 +1414,7 @@ _buildCard(
               children: [
                 Text('Owner: Abah Khuzai'),
                 Text('Builder: BABE.INFO/HeruWingchun'),
-                Text('Link: mekarpaiton.github.io'),
+                Text('Link: mekarpaiton.github.io/'),
               ],
             ),
           ),
