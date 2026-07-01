@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:excel/excel.dart' as ex;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'kategori.dart';
 import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
