@@ -191,9 +191,6 @@ class _DashboardPanelState extends State<DashboardPanel> {
     colorFilter: ColorFilter.mode(Colors.grey, BlendMode.srcIn),
   ),
   label: 'Setting',
-)
-  
-  label: 'Setting',
 ),
         ],
       ),
