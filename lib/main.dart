@@ -1280,7 +1280,7 @@ class _HalamanSettingState extends State<HalamanSetting> {
         children: [
           // 1. CACHE BUSTER
           _buildCard(
-            icon: Icons.rocket_launch,
+            icon: Icon(Icons.rocket_launch),
             title: 'Cache Buster Link',
             subtitle: 'Generate link baru kalo katalog customer nggak update',
             child: Column(
@@ -1311,7 +1311,7 @@ class _HalamanSettingState extends State<HalamanSetting> {
 
           // 2. GANTI PIN
           _buildCard(
-            icon: Icons.lock,
+            icon: Icon(Icons.lock),
             title: 'Ganti PIN Admin',
             subtitle: 'PIN saat ini: 123456',
             child: Row(
@@ -1360,7 +1360,7 @@ class _HalamanSettingState extends State<HalamanSetting> {
 
           // 4. TEST PRINTER
           _buildCard(
-            icon: Icons.print,
+            icon: Icon(Icons.print),
             title: 'Test Printer Thermal',
             subtitle: 'Cek koneksi printer sebelum ada order',
             child: SizedBox(
@@ -1376,7 +1376,7 @@ class _HalamanSettingState extends State<HalamanSetting> {
 
           // 5. BACKUP DATA
           _buildCard(
-            icon: Icons.backup,
+            icon: Icon(Icons.backup),
             title: 'Backup Data',
             subtitle: 'Download semua data produk ke Excel',
             child: SizedBox(
@@ -1391,7 +1391,7 @@ class _HalamanSettingState extends State<HalamanSetting> {
           ),
 //6. kategori
 _buildCard(
-  icon: Icons.category,
+  icon: Icon(Icons.category),
   title: 'Kelola Kategori',
   subtitle: 'Tambah/hapus kategori produk',
   child: SizedBox(
@@ -1406,7 +1406,7 @@ _buildCard(
 ),
           // 7. TENTANG APLIKASI
           _buildCard(
-            icon: Icons.info,
+            icon: Icon(Icons.info),
             title: 'Tentang Aplikasi',
             subtitle: 'Panel TB. MEKAR v1.0.0',
             child: Column(
@@ -1463,7 +1463,7 @@ _buildCard(
                   Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
                 ],
-              )),
+              ),
             ],
           ),
           Divider(height: 24),
@@ -1472,4 +1472,3 @@ _buildCard(
       ),
     );
   }
-}
