@@ -1437,31 +1437,38 @@ _buildCard(
     );
   }
 
-  Widget _buildCard({required IconData icon, required String title, required String subtitle, required Widget child}) {
-    return Card(
-      margin: EdgeInsets.only(bottom: 16),
-      child: Padding(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(icon, color: warnaUtama),
-                SizedBox(width: 12),
-                Expanded(child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-                  ],
-                )),
-              ],
-            ),
-            Divider(height: 24),
-            child,
-          ],
-        ),
+  Widget _buildCard({
+  required Widget icon,
+  required String title,
+  required String subtitle,
+  required Widget child
+}) {
+  return Card(
+    margin: EdgeInsets.only(bottom: 16),
+    child: Padding(
+      padding: EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              IconTheme(
+                data: IconThemeData(color: warnaUtama, size: 45),
+                child: icon,
+              ),
+              SizedBox(width: 12),
+              Expanded(child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                ],
+              )),
+            ],
+          ),
+          Divider(height: 24),
+          child,
+        ],
       ),
     );
   }
