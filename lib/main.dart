@@ -181,9 +181,17 @@ class _DashboardPanelState extends State<DashboardPanel> {
           BottomNavigationBarItem(
   icon: SvgPicture.asset(
     'assets/images/logomekar.svg',
-    width: 24, height: 24,
-    color: Colors.grey,
+    width: 24,
+    height: 24,
   ),
+  activeIcon: SvgPicture.asset(
+    'assets/images/logomekar.svg',
+    width: 26,
+    height: 28,
+    colorFilter: ColorFilter.mode(Colors.grey, BlendMode.srcIn),
+  ),
+  label: 'Setting',
+)
   
   label: 'Setting',
 ),
