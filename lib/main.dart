@@ -1370,8 +1370,22 @@ class _HalamanSettingState extends State<HalamanSetting> {
               ),
             ),
           ),
-
-          // 6. TENTANG APLIKASI
+//6. kategori
+_buildCard(
+  icon: Icons.category,
+  title: 'Kelola Kategori',
+  subtitle: 'Tambah/hapus kategori produk',
+  child: SizedBox(
+    width: double.infinity,
+    child: ElevatedButton.icon(
+      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => HalamanKategori())),
+      icon: Icon(Icons.edit),
+      label: Text('ATUR KATEGORI'),
+      style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+    ),
+  ),
+),
+          // 7. TENTANG APLIKASI
           _buildCard(
             icon: Icons.info,
             title: 'Tentang Aplikasi',
@@ -1386,7 +1400,7 @@ class _HalamanSettingState extends State<HalamanSetting> {
             ),
           ),
 
-          // 7. LOGOUT
+          // 8. LOGOUT
           SizedBox(height: 8),
           SizedBox(
             width: double.infinity,
