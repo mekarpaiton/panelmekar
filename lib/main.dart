@@ -278,25 +278,35 @@ class _HalamanOrderState extends State<HalamanOrder> {
     }
   }
 
+//get orders
   Future<void> getOrders() async {
-    try {
-      final res = await http.get(Uri.parse('$baseUrl/api/orders')).timeout(Duration(seconds: 10));
-      if (res.statusCode == 200) {
-        setState(() {
-          orders = json.decode(res.body);
-          loading = false;
-        });
-      } else {
-        throw Exception('Server error ${res.statusCode}');
-      }
-    } catch (e) {
-      print("API ERROR: $e");
-      setState(() => loading = false);
+  try {
+    final res = await http.get(Uri.parse('$baseUrl/api/orders')).timeout(Duration(seconds: 10));
+    
+    // CEK 1: Status harus 200
+    if (res.statusCode != 200) {
+      throw Exception('Server error ${res.statusCode}');
+    }
+    
+    // CEK 2: Pastiin JSON, bukan HTML
+    if (!res.headers['content-type']!.contains('application/json')) {
+      throw Exception('Server ngasih HTML, bukan JSON');
+    }
+
+    setState(() {
+      orders = json.decode(res.body);
+      loading = false;
+    });
+  } catch (e) {
+    print("API ORDER ERROR: $e");
+    setState(() => loading = false);
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal ambil data: $e'), backgroundColor: Colors.red),
+        SnackBar(content: Text('Gagal ambil pesanan: $e'), backgroundColor: Colors.red),
       );
     }
   }
+}
 
   String formatRupiah(int angka) {
     return NumberFormat.currency(locale: 'id', symbol: 'Rp ', decimalDigits: 0).format(angka);
@@ -455,19 +465,41 @@ class _HalamanProdukState extends State<HalamanProduk> {
     getProduk();
   }
 
-  Future<void> getProduk() async {
-    setState(() => loading = true);
-    try {
-      final res = await http.get(Uri.parse('$baseUrl/api/produk')).timeout(Duration(seconds: 10));
-      setState(() {
-        produk = json.decode(res.body);
-        loading = false;
-      });
-    } catch (e) {
-      setState(() => loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal: $e'), backgroundColor: Colors.red));
+  Future<void> getProduk({String? search, String? kategori}) async {
+  try {
+    setState(() {
+      loading = true;
+      errorMsg = '';
+    });
+
+    String url = '$baseUrl/api/produk?';
+    if (search != null && search.isNotEmpty) url += 'search=$search&';
+    if (kategori != null && kategori != 'Semua') url += 'kategori=$kategori';
+
+    final res = await http.get(Uri.parse(url)).timeout(Duration(seconds: 15));
+
+    // CEK 1: Status harus 200
+    if (res.statusCode != 200) {
+      throw Exception('Server error ${res.statusCode}');
     }
+
+    // CEK 2: Pastiin JSON, bukan HTML
+    if (!res.headers['content-type']!.contains('application/json')) {
+      throw Exception('Server ngasih HTML. Cek PythonAnywhere error log');
+    }
+
+    setState(() {
+      produk = json.decode(res.body);
+      loading = false;
+    });
+  } catch (e) {
+    print("KATALOG ERROR: $e");
+    setState(() {
+      loading = false;
+      errorMsg = 'Gagal ambil data: $e';
+    });
   }
+}
 
   Future<void> hapusProduk(int id, String nama) async {
     bool? confirm = await showDialog(
