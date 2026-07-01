@@ -17,7 +17,7 @@ const Color warnaUtama = Color(0xFF7F00FF);
 const String PIN_ADMIN = "123456";
 
 void main() {
-  WidgetsFlutterBinding.ensureInitialized(); // WAJIB
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const PanelTBMekar());
 }
 
@@ -28,14 +28,50 @@ class PanelTBMekar extends StatelessWidget {
     return MaterialApp(
       title: 'Panel TB. MEKAR',
       theme: ThemeData(
-        primarySwatch: Colors.deepPurple, 
-        fontFamily: 'Poppins', // PAKE FONT DEFAULT AJA
+        primarySwatch: Colors.deepPurple,
+        fontFamily: 'Poppins',
         useMaterial3: false,
       ),
       home: const LoginPage(),
       debugShowCheckedModeBanner: false,
     );
   }
+}
+
+// HELPER AMAN
+String formatTotal(dynamic total) {
+  if (total == null) return 'Rp 0';
+  int angka = int.tryParse(total.toString())?? 0;
+  return NumberFormat.currency(locale: 'id', symbol: 'Rp ', decimalDigits: 0).format(angka);
+}
+
+String formatTanggal(dynamic tgl) {
+  if (tgl == null) return '-';
+  try {
+    return DateFormat('dd/MM/yyyy HH:mm').format(DateTime.parse(tgl.toString()));
+  } catch (e) {
+    return tgl.toString();
+  }
+}
+
+List safeParseList(dynamic data) {
+  try {
+    if (data is String) return jsonDecode(data);
+    if (data is List) return data;
+  } catch (e) {
+    print('Gagal parse list: $e');
+  }
+  return [];
+}
+
+Map safeParseMap(dynamic data) {
+  try {
+    if (data is String) return jsonDecode(data);
+    if (data is Map) return data;
+  } catch (e) {
+    print('Gagal parse map: $e');
+  }
+  return {};
 }
 
 // 1. HALAMAN LOGIN
@@ -104,7 +140,7 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
-// 2. DASHBOARD PANEL - 5 TAB
+// 2. DASHBOARD PANEL
 class DashboardPanel extends StatefulWidget {
   const DashboardPanel({super.key});
   @override
@@ -142,7 +178,7 @@ class _DashboardPanelState extends State<DashboardPanel> {
   }
 }
 
-// 3. HALAMAN PESANAN - ANTI-CRASH + ANTI-PUTIH
+// 3. HALAMAN PESANAN - ANTI-CRASH TOTAL
 class HalamanOrder extends StatefulWidget {
   @override
   State<HalamanOrder> createState() => _HalamanOrderState();
@@ -168,38 +204,32 @@ class _HalamanOrderState extends State<HalamanOrder> {
 
       if (statuses[Permission.bluetoothConnect]!= PermissionStatus.granted ||
           statuses[Permission.bluetoothScan]!= PermissionStatus.granted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Izin Bluetooth ditolak Boss'), backgroundColor: Colors.red),
-        );
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Izin Bluetooth ditolak Boss'), backgroundColor: Colors.red));
         return;
       }
     }
 
     bool enabled = await PrintBluetoothThermal.bluetoothEnabled;
     if (!enabled) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Nyalain Bluetooth dulu Boss'), backgroundColor: Colors.red),
-      );
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Nyalain Bluetooth dulu Boss'), backgroundColor: Colors.red));
       return;
     }
 
     bool isConnected = await PrintBluetoothThermal.connectionStatus;
     if (!isConnected) {
-      showDialog(context: context, barrierDismissible: false, builder: (_) => Center(child: CircularProgressIndicator()));
+      if (mounted) showDialog(context: context, barrierDismissible: false, builder: (_) => Center(child: CircularProgressIndicator()));
       List<BluetoothInfo> devices = await PrintBluetoothThermal.pairedBluetooths;
-      Navigator.pop(context);
+      if (mounted) Navigator.pop(context);
 
       if (devices.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Printer belum di-pairing di HP'), backgroundColor: Colors.red),
-        );
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Printer belum di-pairing di HP'), backgroundColor: Colors.red));
         return;
       }
 
       BluetoothInfo? selected = await showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: Text('Pilih Printer'), // UDAH GA PAKE GOOGLEFONTS
+          title: Text('Pilih Printer'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: devices.map((d) => ListTile(
@@ -218,9 +248,7 @@ class _HalamanOrderState extends State<HalamanOrder> {
         bool connected = await PrintBluetoothThermal.connect(macPrinterAddress: selected.macAdress);
         if (!connected) throw Exception('Gagal konek ke printer');
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal konek: $e'), backgroundColor: Colors.red),
-        );
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal konek: $e'), backgroundColor: Colors.red));
         return;
       }
     }
@@ -230,37 +258,35 @@ class _HalamanOrderState extends State<HalamanOrder> {
       final generator = Generator(PaperSize.mm58, profile);
       List<int> bytes = [];
 
-      String idStr = o['id'].toString();
+      String idStr = o['id']?.toString()?? '';
       String displayId = idStr.length > 8? idStr.substring(0, 8) : idStr;
 
       bytes += generator.text('TB MEKAR', styles: PosStyles(align: PosAlign.center, height: PosTextSize.size2, width: PosTextSize.size2, bold: true));
       bytes += generator.text('Probolinggo', styles: PosStyles(align: PosAlign.center));
       bytes += generator.hr();
       bytes += generator.text('Order: $displayId');
-      bytes += generator.text('Tgl: ${o['tanggal']?? DateFormat('dd-MM-yy HH:mm').format(DateTime.parse(o['created_at']))}');
+      bytes += generator.text('Tgl: ${formatTanggal(o['tanggal']?? o['created_at'])}');
       bytes += generator.text('Kasir: Admin');
       bytes += generator.hr();
 
-      final rawItems = o['items'];
-      final List itemsList = rawItems is String? jsonDecode(rawItems) : rawItems;
-
+      final itemsList = safeParseList(o['items']);
       int total = 0;
       for (var item in itemsList) {
-        int harga = int.tryParse(item['harga'].toString())?? 0;
-        int qty = int.tryParse(item['qty'].toString())?? 0;
+        int harga = int.tryParse(item['harga']?.toString()?? '0')?? 0;
+        int qty = int.tryParse(item['qty']?.toString()?? '0')?? 0;
         int subtotal = qty * harga;
         total += subtotal;
-        bytes += generator.text(item['nama'].toString());
+        bytes += generator.text(item['nama']?.toString()?? 'Item');
         bytes += generator.row([
-          PosColumn(text: '$qty x ${formatRupiah(harga)}', width: 6),
-          PosColumn(text: formatRupiah(subtotal), width: 6, styles: PosStyles(align: PosAlign.right)),
+          PosColumn(text: '$qty x ${formatTotal(harga)}', width: 6),
+          PosColumn(text: formatTotal(subtotal), width: 6, styles: PosStyles(align: PosAlign.right)),
         ]);
       }
       bytes += generator.hr();
 
       bytes += generator.row([
         PosColumn(text: 'TOTAL', width: 6, styles: PosStyles(bold: true)),
-        PosColumn(text: formatRupiah(o['total']!= null? int.tryParse(o['total'].toString())?? total : total), width: 6, styles: PosStyles(align: PosAlign.right, bold: true)),
+        PosColumn(text: formatTotal(o['total']?? total), width: 6, styles: PosStyles(align: PosAlign.right, bold: true)),
       ]);
       bytes += generator.hr();
       bytes += generator.text('Terima Kasih', styles: PosStyles(align: PosAlign.center));
@@ -269,59 +295,51 @@ class _HalamanOrderState extends State<HalamanOrder> {
 
       final result = await PrintBluetoothThermal.writeBytes(bytes);
       if (result == true) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Struk berhasil dicetak!'), backgroundColor: Colors.green));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Struk berhasil dicetak!'), backgroundColor: Colors.green));
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal cetak Boss'), backgroundColor: Colors.red));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal cetak Boss'), backgroundColor: Colors.red));
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
     }
   }
 
-//get orders
   Future<void> getOrders() async {
-  try {
-    final res = await http.get(Uri.parse('$baseUrl/api/orders')).timeout(Duration(seconds: 10));
-    
-    // CEK 1: Status harus 200
-    if (res.statusCode != 200) {
-      throw Exception('Server error ${res.statusCode}');
-    }
-    
-    // CEK 2: Pastiin JSON, bukan HTML
-    if (!res.headers['content-type']!.contains('application/json')) {
-      throw Exception('Server ngasih HTML, bukan JSON');
-    }
+    try {
+      final res = await http.get(Uri.parse('$baseUrl/api/orders')).timeout(Duration(seconds: 15));
+      if (!mounted) return;
 
-    setState(() {
-      orders = json.decode(res.body);
-      loading = false;
-    });
-  } catch (e) {
-    print("API ORDER ERROR: $e");
-    setState(() => loading = false);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal ambil pesanan: $e'), backgroundColor: Colors.red),
-      );
-    }
-  }
-}
+      if (res.statusCode!= 200) throw Exception('Server error ${res.statusCode}');
+      if (!res.headers['content-type']!.contains('application/json')) throw Exception('Response bukan JSON');
 
-  String formatRupiah(int angka) {
-    return NumberFormat.currency(locale: 'id', symbol: 'Rp ', decimalDigits: 0).format(angka);
+      setState(() {
+        orders = json.decode(res.body);
+        loading = false;
+      });
+    } catch (e) {
+      print("API ORDER ERROR: $e");
+      if (!mounted) return;
+      setState(() => loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal ambil pesanan: $e'), backgroundColor: Colors.red));
+    }
   }
 
   Future<void> updateStatus(String orderId, String statusBaru) async {
     try {
-      await http.put(
+      final res = await http.put(
         Uri.parse('$baseUrl/api/orders/$orderId/status'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'status': statusBaru}),
-      );
+      ).timeout(Duration(seconds: 10));
+
+      if (!mounted) return;
+      if (res.statusCode!= 200) throw Exception('Server error ${res.statusCode}');
+      if (!res.headers['content-type']!.contains('application/json')) throw Exception('Response bukan JSON');
+
       getOrders();
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Status diubah: $statusBaru'), backgroundColor: Colors.green));
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal update: $e'), backgroundColor: Colors.red));
     }
   }
@@ -339,29 +357,27 @@ class _HalamanOrderState extends State<HalamanOrder> {
   void copyStrukWA(Map order) {
     try {
       String struk = "🧾 *STRUK TB. MEKAR*\n";
-      struk += "ID: ${order['id']}\n";
-      struk += "Tgl: ${order['created_at']}\n";
-      struk += "Nama: ${order['nama_pembeli']}\n";
-      struk += "Status: ${order['status']?? 'Baru'}\n";
+      struk += "ID: ${order['id']?.toString()?? '-'}\n";
+      struk += "Tgl: ${formatTanggal(order['created_at']?? order['tanggal'])}\n";
+      struk += "Nama: ${order['nama_pembeli']?.toString()?? '-'}\n";
+      struk += "Status: ${order['status']?.toString()?? 'Baru'}\n";
       struk += "------------------------\n";
 
-      final rawItems = order['items'];
-      final List itemsList = rawItems is String? jsonDecode(rawItems) : rawItems;
-
+      final itemsList = safeParseList(order['items']);
       for (var item in itemsList) {
-        int harga = int.tryParse(item['harga'].toString())?? 0;
-        int qty = int.tryParse(item['qty'].toString())?? 0;
-        struk += "${item['nama']} x$qty\n";
-        struk += " ${formatRupiah(harga * qty)}\n";
+        int harga = int.tryParse(item['harga']?.toString()?? '0')?? 0;
+        int qty = int.tryParse(item['qty']?.toString()?? '0')?? 0;
+        struk += "${item['nama']?.toString()?? 'Item'} x$qty\n";
+        struk += " ${formatTotal(harga * qty)}\n";
       }
       struk += "------------------------\n";
-      struk += "*TOTAL: ${formatRupiah(int.tryParse(order['total'].toString())?? 0)}*\n\n";
+      struk += "*TOTAL: ${formatTotal(order['total'])}*\n\n";
       struk += "Terima kasih 🙏";
 
       Clipboard.setData(ClipboardData(text: struk));
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Struk dicopy!'), backgroundColor: Colors.green));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Struk dicopy!'), backgroundColor: Colors.green));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal copy: $e'), backgroundColor: Colors.red));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal copy: $e'), backgroundColor: Colors.red));
     }
   }
 
@@ -370,11 +386,11 @@ class _HalamanOrderState extends State<HalamanOrder> {
     return Scaffold(
       appBar: AppBar(title: Text('Pesanan Masuk'), backgroundColor: warnaUtama),
       body: loading
-         ? Center(child: CircularProgressIndicator())
+        ? Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: getOrders,
               child: orders.isEmpty
-                 ? Center(child: Text('Belum ada pesanan'))
+                ? Center(child: Text('Belum ada pesanan'))
                   : ListView.builder(
                       itemCount: orders.length,
                       itemBuilder: (ctx, i) {
@@ -388,8 +404,7 @@ class _HalamanOrderState extends State<HalamanOrder> {
                           }
                         }
 
-                        final rawItems = o['items'];
-                        final List itemsList = rawItems is String? jsonDecode(rawItems) : (rawItems?? []);
+                        final itemsList = safeParseList(o['items']);
 
                         return Card(
                           margin: EdgeInsets.all(8),
@@ -400,14 +415,14 @@ class _HalamanOrderState extends State<HalamanOrder> {
                               child: Text(statusTervalidasi, style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                             ),
                             title: Text(o['nama_pembeli']?.toString()?? 'Tanpa Nama', style: TextStyle(fontWeight: FontWeight.bold)),
-                            subtitle: Text('${o['id']} - ${formatRupiah(int.tryParse(o['total'].toString())?? 0)}'),
+                            subtitle: Text('${o['id']} - ${formatTotal(o['total'])}'),
                             children: [
-                             ...itemsList.map<Widget>((item) {
-                                int hrg = int.tryParse(item['harga'].toString())?? 0;
-                                int qtypcl = int.tryParse(item['qty'].toString())?? 0;
+                            ...itemsList.map<Widget>((item) {
+                                int hrg = int.tryParse(item['harga']?.toString()?? '0')?? 0;
+                                int qtypcl = int.tryParse(item['qty']?.toString()?? '0')?? 0;
                                 return ListTile(
-                                  title: Text('${item['nama']} x$qtypcl'),
-                                  trailing: Text(formatRupiah(hrg * qtypcl)),
+                                  title: Text('${item['nama']?.toString()?? 'Item'} x$qtypcl'),
+                                  trailing: Text(formatTotal(hrg * qtypcl)),
                                 );
                               }).toList(),
                               Padding(
@@ -465,41 +480,25 @@ class _HalamanProdukState extends State<HalamanProduk> {
     getProduk();
   }
 
-  Future<void> getProduk({String? search, String? kategori}) async {
-  try {
-    setState(() {
-      loading = true;
-      errorMsg = '';
-    });
+  Future<void> getProduk() async {
+    if (mounted) setState(() => loading = true);
+    try {
+      final res = await http.get(Uri.parse('$baseUrl/api/produk')).timeout(Duration(seconds: 15));
+      if (!mounted) return;
 
-    String url = '$baseUrl/api/produk?';
-    if (search != null && search.isNotEmpty) url += 'search=$search&';
-    if (kategori != null && kategori != 'Semua') url += 'kategori=$kategori';
+      if (res.statusCode!= 200) throw Exception('Server error ${res.statusCode}');
+      if (!res.headers['content-type']!.contains('application/json')) throw Exception('Response bukan JSON');
 
-    final res = await http.get(Uri.parse(url)).timeout(Duration(seconds: 15));
-
-    // CEK 1: Status harus 200
-    if (res.statusCode != 200) {
-      throw Exception('Server error ${res.statusCode}');
+      setState(() {
+        produk = json.decode(res.body);
+        loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal: $e'), backgroundColor: Colors.red));
     }
-
-    // CEK 2: Pastiin JSON, bukan HTML
-    if (!res.headers['content-type']!.contains('application/json')) {
-      throw Exception('Server ngasih HTML. Cek PythonAnywhere error log');
-    }
-
-    setState(() {
-      produk = json.decode(res.body);
-      loading = false;
-    });
-  } catch (e) {
-    print("KATALOG ERROR: $e");
-    setState(() {
-      loading = false;
-      errorMsg = 'Gagal ambil data: $e';
-    });
   }
-}
 
   Future<void> hapusProduk(int id, String nama) async {
     bool? confirm = await showDialog(
@@ -515,9 +514,17 @@ class _HalamanProdukState extends State<HalamanProduk> {
     );
 
     if (confirm == true) {
-      await http.delete(Uri.parse('$baseUrl/api/produk/$id'));
-      getProduk();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Produk dihapus'), backgroundColor: Colors.green));
+      try {
+        final res = await http.delete(Uri.parse('$baseUrl/api/produk/$id')).timeout(Duration(seconds: 10));
+        if (!mounted) return;
+        if (res.statusCode!= 200) throw Exception('Server error ${res.statusCode}');
+
+        getProduk();
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Produk dihapus'), backgroundColor: Colors.green));
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal hapus: $e'), backgroundColor: Colors.red));
+      }
     }
   }
 
@@ -530,34 +537,34 @@ class _HalamanProdukState extends State<HalamanProduk> {
     return Scaffold(
       appBar: AppBar(title: Text('Kelola Produk'), backgroundColor: warnaUtama),
       body: loading
-         ? Center(child: CircularProgressIndicator())
+        ? Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: getProduk,
               child: produk.isEmpty
-                 ? Center(child: Text('Belum ada produk'))
+                ? Center(child: Text('Belum ada produk'))
                   : ListView.builder(
                       itemCount: produk.length,
                       itemBuilder: (c, i) {
                         final p = produk[i];
-                        final hargaData = p['harga'];
-                        final hargaMap = hargaData is String? json.decode(hargaData) : hargaData;
-                        final hargaPertama = hargaMap.values.first;
+                        final hargaMap = safeParseMap(p['harga']);
+                        final hargaPertama = hargaMap.values.isNotEmpty? hargaMap.values.first : 0;
+                        final stok = p['stok']?? 0;
 
                         return Card(
                           margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           child: ListTile(
                             leading: ClipRRect(
                               borderRadius: BorderRadius.circular(8),
-                              child: Image.network(p['foto'], width: 50, height: 50, fit: BoxFit.cover,
+                              child: Image.network(p['foto']?.toString()?? '', width: 50, height: 50, fit: BoxFit.cover,
                                   errorBuilder: (c, e, s) => Container(width: 50, height: 50, color: Colors.grey[300], child: Icon(Icons.image, color: Colors.grey))),
                             ),
-                            title: Text(p['nama'], style: TextStyle(fontWeight: FontWeight.bold)),
-                            subtitle: Text('Rp $hargaPertama / ${p['satuan']} - Stok: ${p['stok']}'),
+                            title: Text(p['nama']?.toString()?? '', style: TextStyle(fontWeight: FontWeight.bold)),
+                            subtitle: Text('${formatTotal(hargaPertama)} / ${p['satuan']?? ''} - Stok: $stok'),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 IconButton(icon: Icon(Icons.edit, color: Colors.blue), onPressed: () => bukaFormProduk(dataProduk: p)),
-                                IconButton(icon: Icon(Icons.delete, color: Colors.red), onPressed: () => hapusProduk(p['id'], p['nama'])),
+                                IconButton(icon: Icon(Icons.delete, color: Colors.red), onPressed: () => hapusProduk(p['id'], p['nama']?.toString()?? '')),
                               ],
                             ),
                           ),
@@ -598,14 +605,18 @@ class _FormProdukState extends State<FormProduk> {
   void initState() {
     super.initState();
     if (widget.produk!= null) {
-      namaCtrl.text = widget.produk!['nama'];
-      fotoUrl = widget.produk!['foto'];
-      stokCtrl.text = widget.produk!['stok'].toString();
-      kategori = widget.produk!['kategori'];
-      satuan = widget.produk!['satuan'];
-      final hargaData = widget.produk!['harga'];
-      final hargaMap = hargaData is String? json.decode(hargaData) : hargaData;
-      hargaCtrl.text = hargaMap.values.first.toString();
+      namaCtrl.text = widget.produk!['nama']?.toString()?? '';
+      fotoUrl = widget.produk!['foto']?.toString()?? '';
+      stokCtrl.text = widget.produk!['stok']?.toString()?? '0';
+      kategori = widget.produk!['kategori']?.toString()?? 'Semen';
+      satuan = widget.produk!['satuan']?.toString()?? 'sak';
+
+      try {
+        final hargaMap = safeParseMap(widget.produk!['harga']);
+        hargaCtrl.text = hargaMap.values.isNotEmpty? hargaMap.values.first.toString() : '0';
+      } catch (e) {
+        hargaCtrl.text = '0';
+      }
     }
   }
 
@@ -613,26 +624,28 @@ class _FormProdukState extends State<FormProduk> {
     final picker = ImagePicker();
     final XFile? file = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
     if (file == null) return;
-    setState(() => uploadLoading = true);
+    if (mounted) setState(() => uploadLoading = true);
 
     try {
       var request = http.MultipartRequest('POST', Uri.parse('https://freeimage.host/api/1/upload'));
       request.fields['key'] = '6d207e02198a847aa98d0a2a901485a5';
       request.files.add(await http.MultipartFile.fromPath('source', file.path));
-      var res = await request.send();
+      var res = await request.send().timeout(Duration(seconds: 30));
       var responseData = await res.stream.toBytes();
       var result = json.decode(utf8.decode(responseData));
 
+      if (!mounted) return;
       if (result['status_code'] == 200) {
         setState(() => fotoUrl = result['image']['url']);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Foto keupload!'), backgroundColor: Colors.green));
       } else {
-        throw Exception('Upload gagal');
+        throw Exception('Upload gagal: ${result['error']?['message']?? 'Unknown'}');
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
     } finally {
-      setState(() => uploadLoading = false);
+      if (mounted) setState(() => uploadLoading = false);
     }
   }
 
@@ -643,7 +656,7 @@ class _FormProdukState extends State<FormProduk> {
       return;
     }
 
-    setState(() => isLoading = true);
+    if (mounted) setState(() => isLoading = true);
     Map hargaJson = {satuan: int.parse(hargaCtrl.text)};
     Map data = {
       'nama': namaCtrl.text,
@@ -655,18 +668,33 @@ class _FormProdukState extends State<FormProduk> {
     };
 
     try {
+      http.Response res;
       if (widget.produk == null) {
-        await http.post(Uri.parse('$baseUrl/api/produk'), headers: {'Content-Type': 'application/json'}, body: json.encode(data));
+        res = await http.post(
+          Uri.parse('$baseUrl/api/produk'),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode(data),
+        ).timeout(Duration(seconds: 15));
       } else {
-        await http.put(Uri.parse('$baseUrl/api/produk/${widget.produk!['id']}'), headers: {'Content-Type': 'application/json'}, body: json.encode(data));
+        res = await http.put(
+          Uri.parse('$baseUrl/api/produk/${widget.produk!['id']}'),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode(data),
+        ).timeout(Duration(seconds: 15));
       }
+
+      if (!mounted) return;
+      if (res.statusCode!= 200 && res.statusCode!= 201) throw Exception('Server error ${res.statusCode}');
+      if (!res.headers['content-type']!.contains('application/json')) throw Exception('Response bukan JSON');
+
       widget.onSave();
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(widget.produk == null? 'Produk ditambah' : 'Produk diupdate'), backgroundColor: Colors.green));
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
     } finally {
-      setState(() => isLoading = false);
+      if (mounted) setState(() => isLoading = false);
     }
   }
 
@@ -694,7 +722,7 @@ class _FormProdukState extends State<FormProduk> {
             Text('Foto Produk', style: TextStyle(fontSize: 16, color: Colors.grey[700])),
             SizedBox(height: 8),
             fotoUrl.isEmpty
-               ? Container(width: double.infinity, height: 120, decoration: BoxDecoration(border: Border.all(color: Colors.grey), borderRadius: BorderRadius.circular(8)), child: InkWell(onTap: uploadLoading? null : pilihDanUploadFoto, child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [uploadLoading? CircularProgressIndicator() : Icon(Icons.add_a_photo, size: 40, color: warnaUtama), SizedBox(height: 8), Text(uploadLoading? 'Uploading...' : 'Pilih Foto dari HP'), Text('Otomatis keupload', style: TextStyle(fontSize: 12, color: Colors.grey))])) )
+              ? Container(width: double.infinity, height: 120, decoration: BoxDecoration(border: Border.all(color: Colors.grey), borderRadius: BorderRadius.circular(8)), child: InkWell(onTap: uploadLoading? null : pilihDanUploadFoto, child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [uploadLoading? CircularProgressIndicator() : Icon(Icons.add_a_photo, size: 40, color: warnaUtama), SizedBox(height: 8), Text(uploadLoading? 'Uploading...' : 'Pilih Foto dari HP'), Text('Otomatis keupload', style: TextStyle(fontSize: 12, color: Colors.grey))])) )
                 : Column(children: [ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(fotoUrl, height: 150, width: double.infinity, fit: BoxFit.cover)), SizedBox(height: 8), Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.check_circle, color: Colors.green, size: 16), SizedBox(width: 4), Text('Foto udah online', style: TextStyle(color: Colors.green)), TextButton(onPressed: () => setState(() => fotoUrl = ''), child: Text('Ganti Foto'))])]),
             SizedBox(height: 24),
             SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: isLoading? null : simpanProduk, style: ElevatedButton.styleFrom(backgroundColor: warnaUtama), child: isLoading? CircularProgressIndicator(color: Colors.white) : Text(widget.produk == null? 'TAMBAH PRODUK' : 'UPDATE PRODUK', style: TextStyle(color: Colors.white, fontSize: 16)))),
@@ -705,7 +733,7 @@ class _FormProdukState extends State<FormProduk> {
   }
 }
 
-// 5. HALAMAN LAPORAN + EXPORT EXCEL - VERSI ANTI PUTIH
+// 5. HALAMAN LAPORAN + EXPORT EXCEL - ANTI CRASH TOTAL
 class HalamanHistory extends StatefulWidget {
   @override
   State<HalamanHistory> createState() => _HalamanHistoryState();
@@ -723,42 +751,31 @@ class _HalamanHistoryState extends State<HalamanHistory> {
   }
 
   Future<void> getAllOrders() async {
-  try {
-    setState(() {
-      loading = true;
-      errorMsg = '';
-    });
+    try {
+      if (mounted) setState(() { loading = true; errorMsg = ''; });
+      final res = await http.get(Uri.parse('$baseUrl/api/orders/all')).timeout(Duration(seconds: 15));
+      if (!mounted) return;
 
-    final res = await http.get(Uri.parse('$baseUrl/api/orders/all')).timeout(Duration(seconds: 15));
+      if (res.statusCode!= 200) throw Exception('Server error: ${res.statusCode}');
+      if (!res.headers['content-type']!.contains('application/json')) throw Exception('Response bukan JSON');
 
-    // CEK 1: Status harus 200
-    if (res.statusCode != 200) {
-      throw Exception('Server error: ${res.statusCode}');
+      setState(() {
+        orders = json.decode(res.body);
+        loading = false;
+      });
+    } catch (e) {
+      print("LAPORAN ERROR: $e");
+      if (!mounted) return;
+      setState(() {
+        loading = false;
+        errorMsg = 'Gagal ambil data: $e';
+      });
     }
-
-    // CEK 2: Pastiin JSON, bukan HTML
-    if (!res.headers['content-type']!.contains('application/json')) {
-      throw Exception('Server ngasih HTML, bukan JSON');
-    }
-
-    setState(() {
-      orders = json.decode(res.body);
-      loading = false;
-    });
-  } catch (e) {
-    print("LAPORAN ERROR: $e");
-    setState(() {
-      loading = false;
-      errorMsg = 'Gagal ambil data: $e';
-    });
   }
-}
 
   Future<void> exportExcel() async {
     if (orders.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Data kosong Boss'), backgroundColor: Colors.orange),
-      );
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Data kosong Boss'), backgroundColor: Colors.orange));
       return;
     }
 
@@ -766,7 +783,6 @@ class _HalamanHistoryState extends State<HalamanHistory> {
       var excel = ex.Excel.createExcel();
       ex.Sheet sheet = excel['Transaksi'];
 
-      // Header
       sheet.appendRow([
         ex.TextCellValue('ID'),
         ex.TextCellValue('Tanggal'),
@@ -778,24 +794,22 @@ class _HalamanHistoryState extends State<HalamanHistory> {
       ]);
 
       for (var o in orders) {
-        // PARSING AMAN
         String items = '';
         try {
-          final rawItems = o['items'];
-          final List itemsList = rawItems is String? jsonDecode(rawItems) : (rawItems?? []);
-          items = itemsList.map((i) => '${i['nama']} x${i['qty']}').join(', ');
+          final itemsList = safeParseList(o['items']);
+          items = itemsList.map((i) => '${i['nama']?.toString()?? 'Item'} x${i['qty']?.toString()?? '0'}').join(', ');
         } catch (e) {
           items = 'Error parsing item';
         }
 
         sheet.appendRow([
-          ex.TextCellValue(o['id'].toString()),
-          ex.TextCellValue(o['created_at'].toString()),
-          ex.TextCellValue(o['nama_pembeli'].toString()),
-          ex.TextCellValue(o['wa_pembeli'].toString()),
-          ex.IntCellValue(int.tryParse(o['total'].toString())?? 0),
+          ex.TextCellValue(o['id']?.toString()?? ''),
+          ex.TextCellValue(formatTanggal(o['created_at'])),
+          ex.TextCellValue(o['nama_pembeli']?.toString()?? ''),
+          ex.TextCellValue(o['wa_pembeli']?.toString()?? ''),
+          ex.IntCellValue(int.tryParse(o['total']?.toString()?? '0')?? 0),
           ex.TextCellValue(items),
-          ex.TextCellValue(o['status'].toString()),
+          ex.TextCellValue(o['status']?.toString()?? ''),
         ]);
       }
 
@@ -805,9 +819,7 @@ class _HalamanHistoryState extends State<HalamanHistory> {
 
       await Share.shareXFiles([XFile(file.path)], text: 'History Transaksi TB. MEKAR');
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal export: $e'), backgroundColor: Colors.red),
-      );
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal export: $e'), backgroundColor: Colors.red));
     }
   }
 
@@ -822,9 +834,9 @@ class _HalamanHistoryState extends State<HalamanHistory> {
         ],
       ),
       body: loading
-         ? Center(child: CircularProgressIndicator())
+       ? Center(child: CircularProgressIndicator())
           : errorMsg.isNotEmpty
-             ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+           ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
                   Icon(Icons.error, size: 64, color: Colors.red),
                   SizedBox(height: 16),
                   Text(errorMsg, textAlign: TextAlign.center),
@@ -832,7 +844,7 @@ class _HalamanHistoryState extends State<HalamanHistory> {
                   ElevatedButton(onPressed: getAllOrders, child: Text('Coba Lagi'))
                 ]))
               : orders.isEmpty
-                 ? Center(child: Text('Belum ada transaksi'))
+               ? Center(child: Text('Belum ada transaksi'))
                   : ListView.builder(
                       itemCount: orders.length,
                       itemBuilder: (ctx, i) {
@@ -843,10 +855,9 @@ class _HalamanHistoryState extends State<HalamanHistory> {
                             child: Text('${i + 1}', style: TextStyle(color: Colors.white)),
                           ),
                           title: Text(o['nama_pembeli']?.toString()?? 'Tanpa Nama'),
-                          subtitle: Text(o['created_at']?.toString()?? ''),
+                          subtitle: Text(formatTanggal(o['created_at'])),
                           trailing: Text(
-                            NumberFormat.currency(locale: 'id', symbol: 'Rp ', decimalDigits: 0)
-                               .format(int.tryParse(o['total'].toString())?? 0),
+                            formatTotal(o['total']),
                             style: TextStyle(fontWeight: FontWeight.bold),
                           ),
                         );
@@ -856,7 +867,7 @@ class _HalamanHistoryState extends State<HalamanHistory> {
   }
 }
 
-// 6. HALAMAN KATALOG - PREVIEW CUSTOMER - ANTI PUTIH
+// 6. HALAMAN KATALOG - PREVIEW CUSTOMER - ANTI CRASH TOTAL
 class HalamanKatalog extends StatefulWidget {
   @override
   State<HalamanKatalog> createState() => _HalamanKatalogState();
@@ -878,27 +889,25 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
 
   Future<void> getProduk({String? search, String? kategori}) async {
     try {
-      setState(() {
-        loading = true;
-        errorMsg = '';
-      });
-      
+      if (mounted) setState(() { loading = true; errorMsg = ''; });
+
       String url = '$baseUrl/api/produk?';
       if (search!= null && search.isNotEmpty) url += 'search=$search&';
       if (kategori!= null && kategori!= 'Semua') url += 'kategori=$kategori';
 
       final res = await http.get(Uri.parse(url)).timeout(Duration(seconds: 15));
-      
-      if (res.statusCode == 200) {
-        setState(() {
-          produk = json.decode(res.body);
-          loading = false;
-        });
-      } else {
-        throw Exception('Server error: ${res.statusCode}');
-      }
+      if (!mounted) return;
+
+      if (res.statusCode!= 200) throw Exception('Server error: ${res.statusCode}');
+      if (!res.headers['content-type']!.contains('application/json')) throw Exception('Response bukan JSON');
+
+      setState(() {
+        produk = json.decode(res.body);
+        loading = false;
+      });
     } catch (e) {
       print("KATALOG ERROR: $e");
+      if (!mounted) return;
       setState(() {
         loading = false;
         errorMsg = 'Gagal ambil data: $e';
@@ -953,9 +962,9 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
           ),
           Expanded(
             child: loading
-               ? Center(child: CircularProgressIndicator(color: warnaUtama))
+             ? Center(child: CircularProgressIndicator(color: warnaUtama))
                 : errorMsg.isNotEmpty
-                   ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                 ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
                         Icon(Icons.error, size: 64, color: Colors.red),
                         SizedBox(height: 16),
                         Text(errorMsg, textAlign: TextAlign.center),
@@ -963,18 +972,12 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
                         ElevatedButton(onPressed: getProduk, child: Text('Coba Lagi'))
                       ]))
                     : produk.isEmpty
-                       ? Center(child: Text('Produk tidak ditemukan'))
+                     ? Center(child: Text('Produk tidak ditemukan'))
                         : ListView.builder(
                             itemCount: produk.length,
                             itemBuilder: (c, i) {
                               final p = produk[i];
-                              final hargaData = p['harga'];
-                              Map hargaMap = {};
-                              try {
-                                hargaMap = hargaData is String? json.decode(hargaData) : hargaData;
-                              } catch (e) {
-                                hargaMap = {'pcs': 0};
-                              }
+                              final hargaMap = safeParseMap(p['harga']);
                               final hargaPertama = hargaMap.values.isNotEmpty? hargaMap.values.first : 0;
                               final stok = p['stok']?? 0;
 
@@ -984,7 +987,7 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
                                   leading: ClipRRect(
                                     borderRadius: BorderRadius.circular(8),
                                     child: Image.network(
-                                      p['foto'].toString(),
+                                      p['foto']?.toString()?? '',
                                       width: 50,
                                       height: 50,
                                       fit: BoxFit.cover,
@@ -995,8 +998,8 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
                                           child: Icon(Icons.image)),
                                     ),
                                   ),
-                                  title: Text(p['nama'].toString(), style: TextStyle(fontWeight: FontWeight.bold)),
-                                  subtitle: Text('Rp $hargaPertama / ${p['satuan']}'),
+                                  title: Text(p['nama']?.toString()?? '', style: TextStyle(fontWeight: FontWeight.bold)),
+                                  subtitle: Text('${formatTotal(hargaPertama)} / ${p['satuan']?? ''}'),
                                   trailing: Container(
                                     padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                     decoration: BoxDecoration(
@@ -1026,20 +1029,22 @@ class _HalamanSettingState extends State<HalamanSetting> {
   bool loading = false;
 
   Future<void> generateLinkCacheBuster() async {
-    setState(() => loading = true);
+    if (mounted) setState(() => loading = true);
     String version = DateTime.now().millisecondsSinceEpoch.toString();
     String linkBaru = "https://tbmekar.github.io/katalog.html?v=$version";
 
     await Clipboard.setData(ClipboardData(text: linkBaru));
 
-    setState(() => loading = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Link v$version udah di-copy! Kirim ke customer'),
-        backgroundColor: Colors.green,
-        duration: Duration(seconds: 4),
-      ),
-    );
+    if (mounted) {
+      setState(() => loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Link v$version udah di-copy! Kirim ke customer'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 4),
+        ),
+      );
+    }
   }
 
   @override
@@ -1059,7 +1064,7 @@ class _HalamanSettingState extends State<HalamanSetting> {
             ElevatedButton.icon(
               onPressed: loading? null : generateLinkCacheBuster,
               icon: loading
-                 ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+               ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : Icon(Icons.link),
               label: Text(loading? 'Generate...' : 'Generate Link Katalog Terbaru'),
               style: ElevatedButton.styleFrom(
