@@ -1337,7 +1337,7 @@ class _HalamanSettingState extends State<HalamanSetting> {
 
           // 3. INFO TOKO
           _buildCard(
-            icon: icon: SvgPicture.asset(
+           icon: SvgPicture.asset(
   'assets/images/logomekar.svg',
   width: 45,
   height: 45,
