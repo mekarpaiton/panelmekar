@@ -12,6 +12,8 @@ import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+
 
 const String baseUrl = 'https://abahkhuzai.pythonanywhere.com';
 const Color warnaUtama = Color(0xFF7F00FF);
@@ -106,7 +108,11 @@ class _LoginPageState extends State<LoginPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.storefront, size: 80, color: warnaUtama),
+                SvgPicture.asset(
+  'assets/images/logomekar.svg',
+  width: 80,
+  height: 100,
+  ),
                 SizedBox(height: 16),
                 Text('Panel TB. MEKAR', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                 SizedBox(height: 8),
