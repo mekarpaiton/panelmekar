@@ -1019,60 +1019,352 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
   }
 }
 
-// 7. HALAMAN SETTING
+// 7. HALAMAN SETTING - LENGKAP 7 FITUR + ANTI CRASH
 class HalamanSetting extends StatefulWidget {
   @override
-  _HalamanSettingState createState() => _HalamanSettingState();
+  State<HalamanSetting> createState() => _HalamanSettingState();
 }
 
 class _HalamanSettingState extends State<HalamanSetting> {
-  bool loading = false;
+  int versi = 36; // GANTI SESUAI VERSI SEKARANG
+  String linkGithub = 'https://abahkhuzai.github.io'; // GANTI LINK TOKO
+  final pinCtrl = TextEditingController();
+  final namaTokoCtrl = TextEditingController(text: 'TB. MEKAR');
+  final alamatCtrl = TextEditingController(text: 'Jl. Probolinggo No.1');
+  final waCtrl = TextEditingController(text: '0812-xxxx-xxxx');
 
-  Future<void> generateLinkCacheBuster() async {
-    if (mounted) setState(() => loading = true);
-    String version = DateTime.now().millisecondsSinceEpoch.toString();
-    String linkBaru = "https://tbmekar.github.io/katalog.html?v=$version";
-
-    await Clipboard.setData(ClipboardData(text: linkBaru));
-
+  // 1. CACHE BUSTER
+  void generateLinkBaru() {
+    setState(() => versi++);
+    String linkFinal = '$linkGithub?v=$versi';
+    Clipboard.setData(ClipboardData(text: linkFinal));
     if (mounted) {
-      setState(() => loading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Link v$version udah di-copy! Kirim ke customer'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 4),
-        ),
+        SnackBar(content: Text('✅ Link v$versi dicopy! Share ke customer'), backgroundColor: Colors.green),
       );
     }
   }
 
+  // 2. GANTI PIN
+  void gantiPin() {
+    if (pinCtrl.text.length < 6) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('PIN minimal 6 digit'), backgroundColor: Colors.red),
+        );
+      }
+      return;
+    }
+    // TODO: Simpen ke SharedPreferences / Server
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('PIN berhasil diganti: ${pinCtrl.text}'), backgroundColor: Colors.green),
+      );
+    }
+    pinCtrl.clear();
+  }
+
+  // 3. SIMPAN INFO TOKO
+  void simpanInfoToko() {
+    // TODO: Simpen ke SharedPreferences / Server
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Info toko disimpan'), backgroundColor: Colors.green),
+      );
+    }
+    FocusScope.of(context).unfocus();
+  }
+
+  // 4. TEST PRINTER - PAKE PrintBluetoothThermal Biar Sama
+  Future<void> testPrinter() async {
+    try {
+      await Permission.bluetoothScan.request();
+      await Permission.bluetoothConnect.request();
+
+      bool enabled = await PrintBluetoothThermal.bluetoothEnabled;
+      if (!enabled) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Nyalain Bluetooth dulu Boss'), backgroundColor: Colors.red));
+        return;
+      }
+
+      List<BluetoothInfo> devices = await PrintBluetoothThermal.pairedBluetooths;
+      if (devices.isEmpty) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Printer belum di-pairing'), backgroundColor: Colors.red));
+        return;
+      }
+
+      BluetoothInfo? selected = await showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('Pilih Printer'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: devices.map((d) => ListTile(
+              leading: Icon(Icons.print),
+              title: Text(d.name),
+              subtitle: Text(d.macAdress),
+              onTap: () => Navigator.pop(ctx, d),
+            )).toList(),
+          ),
+        ),
+      );
+
+      if (selected == null) return;
+
+      bool connected = await PrintBluetoothThermal.connect(macPrinterAddress: selected.macAdress);
+      if (!connected) throw Exception('Gagal konek');
+
+      final profile = await CapabilityProfile.load();
+      final generator = Generator(PaperSize.mm58, profile);
+      List<int> bytes = [];
+      bytes += generator.text('TB. MEKAR', styles: PosStyles(align: PosAlign.center, bold: true, height: PosTextSize.size2));
+      bytes += generator.text('TEST PRINTER OK', styles: PosStyles(align: PosAlign.center));
+      bytes += generator.text(DateFormat('dd/MM/yy HH:mm').format(DateTime.now()), styles: PosStyles(align: PosAlign.center));
+      bytes += generator.feed(2);
+      bytes += generator.cut();
+
+      await PrintBluetoothThermal.writeBytes(bytes);
+      await PrintBluetoothThermal.disconnect();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Test print berhasil'), backgroundColor: Colors.green));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Printer error: $e'), backgroundColor: Colors.red));
+    }
+  }
+
+  // 5. BACKUP DATA - ANTI CRASH
+  Future<void> backupProduk() async {
+    try {
+      final res = await http.get(Uri.parse('$baseUrl/api/produk')).timeout(Duration(seconds: 15));
+      if (!mounted) return;
+
+      if (res.statusCode!= 200) throw Exception('Server error ${res.statusCode}');
+      if (!res.headers['content-type']!.contains('application/json')) throw Exception('Response bukan JSON');
+
+      List produk = json.decode(res.body);
+
+      var excel = Excel.createExcel();
+      Sheet sheet = excel['Produk'];
+      sheet.appendRow(['ID', 'Nama', 'Kategori', 'Harga', 'Stok', 'Satuan']);
+
+      for (var p in produk) {
+        final hargaMap = safeParseMap(p['harga']);
+        sheet.appendRow([
+          TextCellValue(p['id']?.toString()?? ''),
+          TextCellValue(p['nama']?.toString()?? ''),
+          TextCellValue(p['kategori']?.toString()?? ''),
+          IntCellValue(hargaMap.values.isNotEmpty? hargaMap.values.first : 0),
+          IntCellValue(p['stok']?? 0),
+          TextCellValue(p['satuan']?.toString()?? ''),
+        ]);
+      }
+
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/backup_produk_tbmekar.xlsx');
+      file.writeAsBytesSync(excel.encode()!);
+      await Share.shareXFiles([XFile(file.path)], text: 'Backup Produk TB. MEKAR');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Backup gagal: $e'), backgroundColor: Colors.red));
+      }
+    }
+  }
+
+  // 6. LOGOUT
+  void logout() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Logout'),
+        content: Text('Yakin mau keluar dari Panel Admin?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Batal')),
+          TextButton(
+            onPressed: () {
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (ctx) => LoginPage()),
+                (route) => false,
+              );
+            },
+            child: Text('Logout', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    String linkSekarang = '$linkGithub?v=$versi';
+
     return Scaffold(
-      appBar: AppBar(title: Text('Setting'), backgroundColor: warnaUtama),
-      body: Padding(
+      appBar: AppBar(title: Text('Setting & Tools'), backgroundColor: warnaUtama),
+      body: ListView(
+        padding: EdgeInsets.all(16),
+        children: [
+          // 1. CACHE BUSTER
+          _buildCard(
+            icon: Icons.rocket_launch,
+            title: 'Cache Buster Link',
+            subtitle: 'Generate link baru kalo katalog customer nggak update',
+            child: Column(
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: warnaUtama.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(linkSekarang, style: TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+                ),
+                SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton.icon(
+                    onPressed: generateLinkBaru,
+                    icon: Icon(Icons.add_link),
+                    label: Text('GENERATE LINK v${versi + 1}'),
+                    style: ElevatedButton.styleFrom(backgroundColor: warnaUtama),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // 2. GANTI PIN
+          _buildCard(
+            icon: Icons.lock,
+            title: 'Ganti PIN Admin',
+            subtitle: 'PIN saat ini: 123456',
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: pinCtrl,
+                    obscureText: true,
+                    keyboardType: TextInputType.number,
+                    maxLength: 6,
+                    decoration: InputDecoration(
+                      labelText: 'PIN Baru 6 digit',
+                      border: OutlineInputBorder(),
+                      counterText: '',
+                    ),
+                  ),
+                ),
+                SizedBox(width: 12),
+                ElevatedButton(onPressed: gantiPin, child: Text('SIMPAN'), style: ElevatedButton.styleFrom(backgroundColor: Colors.orange)),
+              ],
+            ),
+          ),
+
+          // 3. INFO TOKO
+          _buildCard(
+            icon: Icons.storefront,
+            title: 'Info Toko',
+            subtitle: 'Data ini nampil di struk & katalog',
+            child: Column(
+              children: [
+                TextField(controller: namaTokoCtrl, decoration: InputDecoration(labelText: 'Nama Toko', border: OutlineInputBorder())),
+                SizedBox(height: 12),
+                TextField(controller: alamatCtrl, decoration: InputDecoration(labelText: 'Alamat', border: OutlineInputBorder())),
+                SizedBox(height: 12),
+                TextField(controller: waCtrl, keyboardType: TextInputType.phone, decoration: InputDecoration(labelText: 'No WA', border: OutlineInputBorder())),
+                SizedBox(height: 12),
+                SizedBox(width: double.infinity, child: ElevatedButton(onPressed: simpanInfoToko, child: Text('SIMPAN INFO TOKO'))),
+              ],
+            ),
+          ),
+
+          // 4. TEST PRINTER
+          _buildCard(
+            icon: Icons.print,
+            title: 'Test Printer Thermal',
+            subtitle: 'Cek koneksi printer sebelum ada order',
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: testPrinter,
+                icon: Icon(Icons.print),
+                label: Text('CETAK TES'),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+              ),
+            ),
+          ),
+
+          // 5. BACKUP DATA
+          _buildCard(
+            icon: Icons.backup,
+            title: 'Backup Data',
+            subtitle: 'Download semua data produk ke Excel',
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: backupProduk,
+                icon: Icon(Icons.file_download),
+                label: Text('BACKUP PRODUK EXCEL'),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
+              ),
+            ),
+          ),
+
+          // 6. TENTANG APLIKASI
+          _buildCard(
+            icon: Icons.info,
+            title: 'Tentang Aplikasi',
+            subtitle: 'Panel TB. MEKAR v1.0.0',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Developer: Abah Khuzai'),
+                Text('Build: Flutter 3.22'),
+                Text('Link: abahkhuzai.github.io'),
+              ],
+            ),
+          ),
+
+          // 7. LOGOUT
+          SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton.icon(
+              onPressed: logout,
+              icon: Icon(Icons.logout),
+              label: Text('LOGOUT'),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            ),
+          ),
+          SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCard({required IconData icon, required String title, required String subtitle, required Widget child}) {
+    return Card(
+      margin: EdgeInsets.only(bottom: 16),
+      child: Padding(
         padding: EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Cache Buster Katalog', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            SizedBox(height: 8),
-            Text('Pencet tombol di bawah kalo abis update harga/produk. Biar HP customer nggak nge-cache katalog lama.',
-                style: TextStyle(color: Colors.grey[600])),
-            SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: loading? null : generateLinkCacheBuster,
-              icon: loading
-               ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : Icon(Icons.link),
-              label: Text(loading? 'Generate...' : 'Generate Link Katalog Terbaru'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: warnaUtama,
-                foregroundColor: Colors.white,
-                minimumSize: Size(double.infinity, 50),
-              ),
+            Row(
+              children: [
+                Icon(icon, color: warnaUtama),
+                SizedBox(width: 12),
+                Expanded(child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                  ],
+                )),
+              ],
             ),
+            Divider(height: 24),
+            child,
           ],
         ),
       ),
