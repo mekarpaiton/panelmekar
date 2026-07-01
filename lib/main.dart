@@ -178,7 +178,15 @@ class _DashboardPanelState extends State<DashboardPanel> {
           BottomNavigationBarItem(icon: Icon(Icons.inventory_2), label: 'Produk'),
           BottomNavigationBarItem(icon: Icon(Icons.analytics), label: 'Laporan'),
           BottomNavigationBarItem(icon: Icon(Icons.storefront), label: 'Katalog'),
-          BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Setting'),
+          BottomNavigationBarItem(
+  icon: SvgPicture.asset(
+    'assets/images/logomekar.svg',
+    width: 24, height: 24,
+    color: Colors.grey,
+  ),
+  
+  label: 'Setting',
+),
         ],
       ),
     );
@@ -1088,7 +1096,7 @@ class HalamanSetting extends StatefulWidget {
 
 class _HalamanSettingState extends State<HalamanSetting> {
   int versi = 36; // GANTI SESUAI VERSI SEKARANG
-  String linkGithub = 'https://abahkhuzai.github.io'; // GANTI LINK TOKO
+  String linkGithub = 'https://mekarpaiton.github.io/usermekar';
   final pinCtrl = TextEditingController();
   final namaTokoCtrl = TextEditingController(text: 'TB. MEKAR');
   final alamatCtrl = TextEditingController(text: 'Jl. Probolinggo No.1');
@@ -1329,7 +1337,12 @@ class _HalamanSettingState extends State<HalamanSetting> {
 
           // 3. INFO TOKO
           _buildCard(
-            icon: Icons.storefront,
+            icon: icon: SvgPicture.asset(
+  'assets/images/logomekar.svg',
+  width: 45,
+  height: 45,
+  color: warnaUtama,
+),
             title: 'Info Toko',
             subtitle: 'Data ini nampil di struk & katalog',
             child: Column(
@@ -1399,9 +1412,9 @@ _buildCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Developer: Abah Khuzai'),
-                Text('Build: Flutter 3.22'),
-                Text('Link: abahkhuzai.github.io'),
+                Text('Owner: Abah Khuzai'),
+                Text('Builder: BABE.INFO/HeruWingchun'),
+                Text('Link: mekarpaiton.github.io'),
               ],
             ),
           ),
